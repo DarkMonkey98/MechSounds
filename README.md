@@ -20,7 +20,7 @@ next to it — see [Sound packs](#sound-packs).
 The app is a single C file. Build it with Zig (any recent version):
 
 ```sh
-zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows -o MechSounds.exe MechSounds.c -lwinmm -lgdi32
+zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows -o MechSounds.exe MechSounds.c -lwinmm -lgdi32 -lshell32
 ```
 
 That produces a standalone `MechSounds.exe` — no installer, no
@@ -31,16 +31,21 @@ dependencies beyond stock Windows. Put it in a folder next to a
 
 A chooser window opens first. The presets are grouped by switch
 type — **Linear** (Rainy 75 Pro, NK Cream, Everglide Oreo, Leobog
-Reaper), **Tactile** (Crystal Panda), **Topre** (HHKB Topre), **Clicky**
-(IBM Model M) — click one to hear it. Or pick **Custom build** and
-tune your own: switch type (linear / tactile / clicky), lubed or
-not, case material (plastic / aluminum / brass), and mods (tape mod,
-o-rings, both, neither). The custom build starts from a real
-recording of that switch type and shapes it to match — lube and tape
-soften it, aluminum adds a bright ping, brass deepens it, o-rings
-shorten the tail. Pick a volume and hit **Start**. The window hides
-to the tray icon, and the sounds play from then on. Your pick and
-volume are remembered for next time.
+Reaper, Keychron Q3, Ikki68 Aurora, Aula F75, Custom keyboard,
+Epomaker TH85), **Tactile** (Crystal Panda), **Topre** (HHKB Topre),
+**Clicky** (IBM Model M, HyperX Alloy), **Hall Effect** (Gravastar
+V60 Pro, Wooting 60HE) — click one to hear it. Under the list, a
+**"View \<profile\> on MechVibes"** link opens that sound's pack
+page on Mechvibes in your browser, so you can hear the original
+recording and read about the board it came from. Or pick **Custom
+build** and tune your own: switch type (linear / tactile / clicky),
+lubed or not, case material (plastic / aluminum / brass), and mods
+(tape mod, o-rings, both, neither). The custom build starts from a
+real recording of that switch type and shapes it to match — lube
+and tape soften it, aluminum adds a bright ping, brass deepens it,
+o-rings shorten the tail. Pick a volume and hit **Start**. The
+window hides to the tray icon, and the sounds play from then on.
+Your pick and volume are remembered for next time.
 
 - **Start with Windows:** tick the checkbox in the chooser (or
   right-click the tray icon → "Start with Windows"). When it starts
@@ -62,19 +67,32 @@ volume are remembered for next time.
 
 ## Switch profiles
 
-All seven are **real recordings** from [Mechvibes](https://mechvibes.com/sound-packs).
+All fifteen are **real recordings** from [Mechvibes](https://mechvibes.com/sound-packs).
 It starts on **Rainy 75 Pro** (the fullest sound).
 `Ctrl+Alt+P` cycles through:
 
-| Profile | Character |
-|---|---|
-| Rainy 75 Pro | Kailh Cocoa on a WOB Rainy 75 Pro — creamy thock |
-| NK Cream | NovelKeys Cream — deep, smooth, marbly thock |
-| Crystal Panda | Keychron V1 Crystal Panda — crisp tactile thock |
-| Everglide Oreo | Oreo linear — clean, medium-deep thock |
-| HHKB Topre 45g | Real Topre — soft, muted, deep thock |
-| IBM Model M | Buckling spring — loud, metallic click-clack |
-| Leobog Reaper | Aula F75 Leobog Reaper — creamy, full linear |
+| Profile | Character | MechVibes page |
+|---|---|---|
+| Rainy 75 Pro | Kailh Cocoa on a WOB Rainy 75 Pro — creamy thock | [Rainy 75 Pro](https://mechvibes.com/sound-packs/that-is-the-creamiest-i-ever-do-wtf-wob-rainy-75-pro-fr4-kailh-cocoa-by) |
+| NK Cream | NovelKeys Cream — deep, smooth, marbly thock | [NK Cream](https://mechvibes.com/sound-packs/custom-sound-pack-1203000000038/) |
+| Crystal Panda | Keychron V1 Crystal Panda — crisp tactile thock | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Everglide Oreo | Oreo linear — clean, medium-deep thock | [EG Oreo](https://mechvibes.com/sound-packs/eg-oreo) |
+| HHKB Topre 45g | Real Topre — soft, muted, deep thock | [HHKB Hybrid Topre](https://mechvibes.com/sound-packs/hhkb-hybrid-topre) |
+| IBM Model M | Buckling spring — loud, metallic click-clack | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Leobog Reaper | Aula F75 Max Leobog Reaper — creamy, full linear | [Aula F75 Max Reaper](https://mechvibes.com/sound-packs/aula-f75-max-leobog-reaper-switch) |
+| Keychron Q3 | Gateron G Pro Red — smooth linear thock | [Keychron Q3](https://mechvibes.com/sound-packs/amazin-keychron-q3-bluex) |
+| Ikki68 Aurora | C3 Tangerine — orange, creamy linear | [Orange deluxe](https://mechvibes.com/sound-packs/orange-deluxe) |
+| Aula F75 | Aula F75 — creamy | [Aula F75](https://mechvibes.com/sound-packs/aula-f75) |
+| Custom keyboard | Generic linear — clean, neutral linear | [Creamy thingy](https://mechvibes.com/sound-packs/creamy-thingy) |
+| Gravastar V60 Pro | GravaStar Hall Effect — creamy magnetic | [Gravastar V60 Pro](https://mechvibes.com/sound-packs/gravastar-v60-pro-lubed) |
+| HyperX Alloy | Cherry MX Blue — classic clicky | [HyperX Alloy](https://mechvibes.com/sound-packs/hyperx-alloy-cherry-mx-blue) |
+| Wooting 60HE | Lekker L60 Hall Effect — smooth magnetic | [Wooting 60HE V2](https://mechvibes.com/sound-packs/wooting-60he-v2) |
+| Epomaker TH85 | Creamy Jade linear — soft, creamy thock | [Epomaker Creamy Jade](https://mechvibes.com/sound-packs/epomaker-creamy-jade) |
+
+Eight of these (Keychron Q3, Ikki68 Aurora, Aula F75, Custom
+keyboard, Gravastar V60 Pro, HyperX Alloy, Wooting 60HE, Epomaker
+TH85) are the rest of Mechvibes' 10 most-downloaded keyboard packs
+— Rainy 75 Pro (#1) and Leobog Reaper (#4) were already in.
 
 One click per press: a key plays one recording when you press it
 and nothing when you let go — holding a key never re-triggers.
@@ -127,6 +145,18 @@ Packs used in the release build:
 - HHKB Topre 45g — HHKB Pro 2 with stock Topre 45g
 - IBM Model M — IBM Model M 1985, buckling spring
 - Leobog Reaper — Aula F75 Max, Leobog Reaper switches
+- Keychron Q3 — Keychron Q3, Gateron G Pro Red
+- Ikki68 Aurora (Orange deluxe) — Wuque Studio Ikki68 Aurora, C3 Tangerine
+- Aula F75 — Aula F75, creamy
+- Custom keyboard (Creamy thingy) — custom board, Generic linear
+- Gravastar V60 Pro — GravaStar V60 Pro, GravaStar Hall Effect
+- HyperX Alloy — HyperX Alloy, Cherry MX Blue
+- Wooting 60HE — Wooting 60HE, Lekker L60 Hall Effect
+- Epomaker TH85 (Creamy Jade) — Epomaker TH85, Epomaker Creamy Jade
+
+Crystal Panda's and IBM Model M's exact Mechvibes pack pages
+couldn't be pinned down, so their links in the app point to the
+Mechvibes pack library instead of a guessed URL.
 
 Each clip is cut around its loudest point, since some packs hide the
 click 100–200 ms into the window.

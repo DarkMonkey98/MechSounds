@@ -68,15 +68,42 @@ VK_RSHIFT = 0xA1
 VK_LWIN = 0x5B
 VK_RWIN = 0x5C
 
-PROFILES = ["Rainy75", "NKCream", "CrystalPanda", "Oreo", "RealTopre", "ModelM", "Reaper"]
+PROFILES = ["Rainy75", "NKCream", "CrystalPanda", "Oreo", "RealTopre", "ModelM", "Reaper",
+            "KeychronQ3", "OrangeDeluxe", "AulaF75", "CreamyThingy", "GravastarV60",
+            "HyperXAlloy", "Wooting60HE", "EpomakerTH85"]
 PROFILE_NAMES = {
-    "Rainy75": "Rainy 75 Pro - REAL Kailh Cocoa recording",
-    "NKCream": "NK Cream - REAL NovelKeys Cream recording",
-    "CrystalPanda": "Crystal Panda - REAL Keychron tactile recording",
-    "Oreo": "Everglide Oreo - REAL linear recording",
-    "RealTopre": "HHKB Topre 45g - REAL Topre recording",
-    "ModelM": "IBM Model M - REAL buckling spring",
-    "Reaper": "Leobog Reaper - REAL creamy linear",
+    "Rainy75": "Rainy 75 Pro - Kailh Cocoa",
+    "NKCream": "NK Cream - NovelKeys Cream",
+    "CrystalPanda": "Crystal Panda - Keychron V1 tactile",
+    "Oreo": "Oreo - Everglide Oreo linear",
+    "RealTopre": "HHKB Topre 45g",
+    "ModelM": "IBM Model M - buckling spring",
+    "Reaper": "Aula F75 Max - Leobog Reaper",
+    "KeychronQ3": "Keychron Q3 - Gateron G Pro Red",
+    "OrangeDeluxe": "Ikki68 Aurora - C3 Tangerine",
+    "AulaF75": "Aula F75 - creamy",
+    "CreamyThingy": "Custom keyboard - Generic linear",
+    "GravastarV60": "Gravastar V60 Pro - Hall Effect",
+    "HyperXAlloy": "HyperX Alloy - Cherry MX Blue",
+    "Wooting60HE": "Wooting 60HE - Lekker L60 Hall Effect",
+    "EpomakerTH85": "Epomaker TH85 - Creamy Jade",
+}
+PROFILE_URLS = {
+    "Rainy75": "https://mechvibes.com/sound-packs/that-is-the-creamiest-i-ever-do-wtf-wob-rainy-75-pro-fr4-kailh-cocoa-by",
+    "NKCream": "https://mechvibes.com/sound-packs/custom-sound-pack-1203000000038/",
+    "CrystalPanda": "https://mechvibes.com/sound-packs",
+    "Oreo": "https://mechvibes.com/sound-packs/eg-oreo",
+    "RealTopre": "https://mechvibes.com/sound-packs/hhkb-hybrid-topre",
+    "ModelM": "https://mechvibes.com/sound-packs",
+    "Reaper": "https://mechvibes.com/sound-packs/aula-f75-max-leobog-reaper-switch",
+    "KeychronQ3": "https://mechvibes.com/sound-packs/amazin-keychron-q3-bluex",
+    "OrangeDeluxe": "https://mechvibes.com/sound-packs/orange-deluxe",
+    "AulaF75": "https://mechvibes.com/sound-packs/aula-f75",
+    "CreamyThingy": "https://mechvibes.com/sound-packs/creamy-thingy",
+    "GravastarV60": "https://mechvibes.com/sound-packs/gravastar-v60-pro-lubed",
+    "HyperXAlloy": "https://mechvibes.com/sound-packs/hyperx-alloy-cherry-mx-blue",
+    "Wooting60HE": "https://mechvibes.com/sound-packs/wooting-60he-v2",
+    "EpomakerTH85": "https://mechvibes.com/sound-packs/epomaker-creamy-jade",
 }
 KIND_DOWN, KIND_SPACE = 0, 1
 

@@ -36,6 +36,15 @@ PACKS = [
     ('hhkb', 'RealTopre'),
     ('modelm', 'ModelM'),
     ('reaper', 'Reaper'),
+    # Top 10 most-downloaded keyboard packs (Nov 2026), new in v10
+    ('keychron-q3', 'KeychronQ3'),
+    ('orange-deluxe', 'OrangeDeluxe'),
+    ('aula-f75', 'AulaF75'),
+    ('creamy-thingy', 'CreamyThingy'),
+    ('gravastar-v60', 'GravastarV60'),
+    ('hyperx-alloy', 'HyperXAlloy'),
+    ('wooting-60he', 'Wooting60HE'),
+    ('epomaker-th85', 'EpomakerTH85'),
 ]
 
 
@@ -57,7 +66,8 @@ def to_mono(x):
     return x.astype(np.float64)
 
 
-def decode_ogg(path):
+def decode_any(path):
+    """Decode any non-WAV audio (ogg, mp3, ...) to mono float via ffmpeg."""
     tmp = tempfile.mktemp(suffix='.wav')
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', path,
                     '-ac', '1', '-ar', '48000', tmp], check=True)
@@ -67,10 +77,10 @@ def decode_ogg(path):
 
 
 def load_audio(path):
-    if path.lower().endswith('.ogg'):
-        return decode_ogg(path)
-    sr, x = wavfile.read(path)
-    return sr, to_mono(x) / 32768.0
+    if path.lower().endswith('.wav'):
+        sr, x = wavfile.read(path)
+        return sr, to_mono(x) / 32768.0
+    return decode_any(path)
 
 
 def slice_around_peak(y, sr, t0, t1, pre_ms=30, total_ms=200):
