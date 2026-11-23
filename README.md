@@ -29,7 +29,7 @@ never pause (the setting is remembered).
 
 ## Get it
 
-[Download MechSounds v14](https://muse.ai/files/1323371437529100/1472062085083259/z6dqmznmlymx2jvxw3zy5uct/MechSounds-v14.zip) — ready-to-run zip (exe + sounds).
+[Download MechSounds v15](https://muse.ai/files/1323371437529100/29320095037601332/w0ngcz27rgl0lwrbru1a3d2y/MechSounds-v15.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 
@@ -40,7 +40,7 @@ Or build the exe from the source below.
 The app is a single C file. Build it with Zig (any recent version):
 
 ```sh
-zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows -o MechSounds.exe MechSounds.c -lwinmm -lgdi32 -lshell32 -lcomctl32
+zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows -o MechSounds.exe MechSounds.c -lwinmm -lgdi32 -lshell32 -lcomctl32 -lwininet -lmfplat -lmfreadwrite -lmfuuid -lole32
 ```
 
 That produces a standalone `MechSounds.exe` — no installer, no
@@ -67,6 +67,13 @@ Your pick and volume are remembered for next time.
   your last saved switch and volume.
 - **Change switches later:** double-click the tray icon to reopen
   the chooser, or right-click it and pick a switch from the menu.
+- **Add your own keyboard:** type your keyboard's name in the
+  "Search MechVibes" box and hit **Search**. If MechVibes has a
+  pack for that board, it shows up — double-click it to download,
+  convert and install it as a new profile on the right tab. If
+  that keyboard comes with different switch choices, they all
+  show up and you pick the one you have. Added packs are
+  remembered, so they stay in the list next time you open the app.
 
 ## Controls
 
