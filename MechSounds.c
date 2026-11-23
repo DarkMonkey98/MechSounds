@@ -70,7 +70,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v10"
+#define MECHSOUNDS_VERSION "v11"
 
 #define WM_TRAYICON  (WM_USER + 1)
 #define WM_PLAY_DOWN (WM_USER + 2)
@@ -89,6 +89,8 @@
 #define ID_CH_VOLUME  2005
 #define ID_CH_TEST    2006
 #define ID_CH_LINK    2007
+#define ID_CH_GAMEPAUSE 2008
+#define IDT_GAMECHECK  1
 #define ID_CH_SW      2030
 #define ID_CH_LUBE    2031
 #define ID_CH_CASE    2032
@@ -175,6 +177,8 @@ static char exeDir[MAX_PATH];
 static int curProfile = 0;     /* 0-6 preset, 7 = custom build */
 static int volume = 80;        /* percent */
 static BOOL enabled = TRUE;
+static BOOL pauseInGames = TRUE;  /* auto-pause when a game is foreground */
+static BOOL gamePaused = FALSE;   /* a game is foreground right now */
 static BOOL running = FALSE;   /* hook installed + tray icon up */
 static BOOL keyDownState[256]; /* which keys are currently held (repeat filter) */
 
@@ -234,6 +238,8 @@ static void save_settings(void) {
         RegSetValueExA(k, "CustomLube", 0, REG_DWORD, (BYTE *)&cl, sizeof(cl));
         RegSetValueExA(k, "CustomCase", 0, REG_DWORD, (BYTE *)&cc, sizeof(cc));
         RegSetValueExA(k, "CustomMods", 0, REG_DWORD, (BYTE *)&cm, sizeof(cm));
+        { DWORD pg = pauseInGames ? 1 : 0;
+          RegSetValueExA(k, "PauseInGames", 0, REG_DWORD, (BYTE *)&pg, sizeof(pg)); }
         RegCloseKey(k);
     }
 }
@@ -267,6 +273,9 @@ static void load_settings(void) {
         if (RegQueryValueExA(k, "CustomMods", NULL, &t, (BYTE *)&v, &sz) == ERROR_SUCCESS
             && v < 4)
             customMods = (int)v;
+        sz = sizeof(v); t = REG_DWORD;
+        if (RegQueryValueExA(k, "PauseInGames", NULL, &t, (BYTE *)&v, &sz) == ERROR_SUCCESS)
+            pauseInGames = (v != 0);
         RegCloseKey(k);
     }
 }
@@ -872,6 +881,120 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
     return CallNextHookEx(hHook, nCode, wParam, lParam);
 }
 
+
+static void update_tip(void);
+
+/* ---------------- game-safe: auto-pause in games ------------------ */
+/* Anticheat (BattleEye, EAC, Vanguard, VAC) flags global keyboard
+   hooks — they are how cheats intercept input. MechSounds never
+   reads game memory or changes input, but the hook itself is what
+   gets noticed. So when a game is in the foreground we remove the
+   hook entirely (UnhookWindowsHookEx) and put it back when the game
+   is gone. No hook installed while a game runs = nothing to flag.
+   Detection is twofold: a list of well-known game executables, plus
+   any fullscreen window (covers borderless-windowed games too). */
+
+static const char *GameExes[] = {
+    "valorant-win64-shipping.exe", "valorant.exe",
+    "fortniteclient-win64-shipping.exe",
+    "r5apex.exe", "apex.exe",
+    "cod.exe", "modernwarfare.exe", "blackops6.exe", "mw2.exe", "warzone.exe",
+    "cs2.exe", "csgo.exe",
+    "overwatch.exe",
+    "rustclient.exe",
+    "h1z1.exe", "z1br.exe",
+    "tslgame.exe", "pubg.exe",
+    "gta5.exe", "gta5enhanced.exe",
+    "robloxplayerbeta.exe",
+    "leagueclient.exe", "league of legends.exe",
+    "destiny2.exe",
+    "escapefromtarkov.exe",
+    "rainbowsix.exe",
+    "bf2042.exe", "bf.exe", "battlefield.exe",
+    "eldenring.exe",
+    "dota2.exe",
+    "rocketleague.exe",
+    "haloinfinite.exe",
+    "deadlock.exe",
+    "marvelrivals.exe",
+    "thefinals.exe",
+    "fragpunk.exe",
+    "deltaforce.exe",
+    "wutheringwaves.exe",
+    "genshinimpact.exe",
+    "starrail.exe",
+    "zenlesszonezero.exe",
+};
+
+static BOOL exe_is_game(const char *exe) {
+    char lower[64];
+    size_t i, n = strlen(exe);
+    if (n >= sizeof(lower))
+        n = sizeof(lower) - 1;
+    for (i = 0; i < n; i++)
+        lower[i] = (char)tolower((unsigned char)exe[i]);
+    lower[n] = '\0';
+    for (i = 0; i < sizeof(GameExes) / sizeof(GameExes[0]); i++)
+        if (strcmp(lower, GameExes[i]) == 0)
+            return TRUE;
+    return FALSE;
+}
+
+static BOOL is_game_foreground(void) {
+    HWND fg;
+    RECT wr;
+    DWORD pid = 0;
+    HANDLE proc = NULL;
+    char path[MAX_PATH] = {0};
+    char *base;
+    BOOL game = FALSE;
+
+    fg = GetForegroundWindow();
+    if (!fg)
+        return FALSE;
+    if (GetWindowRect(fg, &wr)) {
+        int sw = GetSystemMetrics(SM_CXSCREEN);
+        int sh = GetSystemMetrics(SM_CYSCREEN);
+        if (wr.left <= 0 && wr.top <= 0 &&
+            wr.right >= sw && wr.bottom >= sh)
+            game = TRUE;
+    }
+    GetWindowThreadProcessId(fg, &pid);
+    if (pid) {
+        proc = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (proc) {
+            DWORD sz = sizeof(path);
+            if (QueryFullProcessImageNameA(proc, 0, path, &sz)) {
+                base = strrchr(path, '\\');
+                base = base ? base + 1 : path;
+                if (exe_is_game(base))
+                    game = TRUE;
+            }
+            CloseHandle(proc);
+        }
+    }
+    return game;
+}
+
+static void game_check(void) {
+    BOOL game;
+    if (!pauseInGames || !running)
+        return;
+    game = is_game_foreground();
+    if (game && !gamePaused && hHook) {
+        UnhookWindowsHookEx(hHook);
+        hHook = NULL;
+        gamePaused = TRUE;
+        update_tip();
+        log_msg("game_check: game foreground, hook removed");
+    } else if (!game && gamePaused) {
+        hHook = SetWindowsHookExA(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInst, 0);
+        gamePaused = FALSE;
+        update_tip();
+        log_msg("game_check: game gone, hook reinstalled");
+    }
+}
+
 /* ---------------- engine start (hook + tray + hotkeys) ------------ */
 
 static void show_balloon(const char *text);
@@ -903,6 +1026,7 @@ static void start_engine(void) {
     RegisterHotKey(hwnd, HOTKEY_QUIT, MOD_CONTROL | MOD_ALT, 'Q');
 
     running = TRUE;
+    SetTimer(hwnd, IDT_GAMECHECK, 1000, NULL);
     log_msg("start_engine: hook installed, tray icon added, running");
     /* Unmissable confirmation the app is running, even if Windows
        hides the tray icon in the overflow. */
@@ -914,8 +1038,10 @@ static void start_engine(void) {
 static void update_tip(void) {
     unsigned long long avg = dispatchN ? dispatchSum / dispatchN : 0;
     snprintf(nid.szTip, sizeof(nid.szTip),
-             "MechSounds %s - %s%s | dispatch avg %llums max %llums",
-             MECHSOUNDS_VERSION, current_profile_name(), enabled ? "" : " (off)",
+             "MechSounds %s - %s%s%s | dispatch avg %llums max %llums",
+             MECHSOUNDS_VERSION, current_profile_name(),
+             enabled ? "" : " (off)",
+             gamePaused ? " (paused - game)" : "",
              avg, dispatchMax);
     nid.uFlags = NIF_TIP;
     Shell_NotifyIconA(NIM_MODIFY, &nid);
@@ -1065,6 +1191,15 @@ static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         } else if (id == ID_CH_STARTUP && code == BN_CLICKED) {
             BOOL on = SendMessage((HWND)lp, BM_GETCHECK, 0, 0) == BST_CHECKED;
             set_startup(on);
+        } else if (id == ID_CH_GAMEPAUSE && code == BN_CLICKED) {
+            pauseInGames = SendMessage((HWND)lp, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            save_settings();
+            if (!pauseInGames && gamePaused) {
+                gamePaused = FALSE;
+                if (!hHook)
+                    hHook = SetWindowsHookExA(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInst, 0);
+                update_tip();
+            }
         } else if (id == ID_CH_VOLUME && code == CBN_SELCHANGE) {
             int sel = (int)SendMessage((HWND)lp, CB_GETCURSEL, 0, 0);
             if (sel >= 0 && sel < NVOLUMES) {
@@ -1112,7 +1247,7 @@ static void create_chooser(void) {
         SetForegroundWindow(hwndChooser);
         return;
     }
-    int w = 400, hh = 720;
+    int w = 400, hh = 750;
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - hh) / 2;
     char title[64];
@@ -1239,23 +1374,31 @@ static void create_chooser(void) {
     SendMessage(chk, BM_SETCHECK,
                 startup_enabled() ? BST_CHECKED : BST_UNCHECKED, 0);
 
+    HWND gchk = CreateWindowExA(0, "BUTTON", "Pause sounds automatically in games",
+                                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+                                16, 600, 300, 20,
+                                hwndChooser, (HMENU)ID_CH_GAMEPAUSE, hInst, NULL);
+    SendMessage(gchk, WM_SETFONT, (WPARAM)font, TRUE);
+    SendMessage(gchk, BM_SETCHECK,
+                pauseInGames ? BST_CHECKED : BST_UNCHECKED, 0);
+
     c = CreateWindowExA(0, "STATIC", "Start hides this window - sounds keep playing",
-                        WS_CHILD | WS_VISIBLE, 16, 604, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 632, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "STATIC", "from the tray icon. Double-click the tray icon to pick again.",
-                        WS_CHILD | WS_VISIBLE, 16, 622, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 650, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Start",
                         WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                        216, 648, 80, 26,
+                        216, 676, 80, 26,
                         hwndChooser, (HMENU)ID_CH_START, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "BUTTON", "Quit",
                         WS_CHILD | WS_VISIBLE,
-                        304, 648, 80, 26,
+                        304, 676, 80, 26,
                         hwndChooser, (HMENU)ID_CH_QUIT, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
@@ -1300,6 +1443,10 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             keyDownState[vk] = FALSE;
         return 0;
     }
+    case WM_TIMER:
+        if (wp == IDT_GAMECHECK)
+            game_check();
+        return 0;
     case WM_HOTKEY:
         if (wp == HOTKEY_TOGGLE) {
             enabled = !enabled;

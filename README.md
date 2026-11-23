@@ -9,6 +9,24 @@ sounds through a MacBook trackpad). Same idea, different trick: instead
 of trackpad haptics, MechSounds listens to your key presses system-wide and plays a recording of
 a real mechanical switch to your normal audio output.
 
+![MechSounds chooser - pick a switch, or build your own](screenshot.png)
+
+## Game-safe
+
+Anticheat (BattleEye, Easy Anti-Cheat, Vanguard, VAC) flags global
+keyboard hooks — they are how cheats intercept input. MechSounds
+never reads game memory, never changes your input, and never injects
+into a game, but the hook itself is what gets noticed. So it watches
+the foreground window once a second: when a game is in front (a
+known game executable, or any fullscreen window — including
+borderless-windowed games), it **removes the keyboard hook entirely**
+and the sounds stop. When you tab back to the desktop, the hook goes
+back in and the sounds resume. No hook is installed while a game
+runs, so there is nothing for anticheat to flag. The tray tooltip
+says "(paused - game)" while it is paused. Untick **"Pause sounds
+automatically in games"** in the chooser if you would rather it
+never pause (the setting is remembered).
+
 ## Get it
 
 Download the ready-to-run zip (exe + sounds) from
@@ -138,9 +156,9 @@ This is built so the sound never lags behind your fingers:
 - **Admin windows:** keys typed into apps running as administrator
   (Task Manager, some installers) won't make sounds unless you also
   run the app as administrator (right-click → Run as administrator).
-- **Games with anticheat:** keyboard hooks can look suspicious to
-  anticheat. Toggle it off with `Ctrl+Alt+M` before launching a
-  competitive game.
+- **Games:** it pauses itself automatically when a game is in
+  front (see [Game-safe](#game-safe)) — no need to toggle it off
+  by hand.
 - The sounds are real recordings, not synthesized: the first
   version synthesized its switch sounds, and the loudest one had
   44% of its attack energy in a single 480 Hz tone — which is why
@@ -150,6 +168,7 @@ This is built so the sound never lags behind your fingers:
 ## Files
 
 - `MechSounds.c` — the app. Builds with Zig (see above).
+- `screenshot.png` — the chooser window, as shown above.
 - `MechSounds.py` — same app as a Python script (stdlib only).
   Run `python MechSounds.py` next to a `sounds/` folder.
 - `build_real_profiles.py` — converts Mechvibes packs in
