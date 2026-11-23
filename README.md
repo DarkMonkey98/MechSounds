@@ -19,17 +19,20 @@ never reads game memory, never changes your input, and never injects
 into a game, but the hook itself is what gets noticed. So it watches
 the foreground window once a second: when a game is in front (a
 known game executable, or any fullscreen window — including
-borderless-windowed games), it **removes the keyboard hook entirely**
+borderless-windowed games, on any monitor), it **removes the keyboard hook entirely**
 and the sounds stop. When you tab back to the desktop, the hook goes
 back in and the sounds resume. No hook is installed while a game
 runs, so there is nothing for anticheat to flag. The tray tooltip
-says "(paused - game)" while it is paused. Untick **"Pause sounds
-automatically in games"** in the chooser if you would rather it
-never pause (the setting is remembered).
+says "(paused - game)" while it is paused. **Safe mode** is the
+toggle for this: tick **"Safe mode - pause in games"** in the
+chooser (or right-click the tray icon → **"Safe mode (pause in
+games)"**) to pause in games, untick it to keep the sounds running
+in whatever program, application, or game you are in. The setting
+is remembered.
 
 ## Get it
 
-[Download MechSounds v19](https://muse.ai/files/1323371437529100/1111020011695439/hx9850wu7ogfbmi9657z7uph/MechSounds-v19.zip) — ready-to-run zip (exe + sounds).
+[Download MechSounds v20](https://muse.ai/files/1323371437529100/28299354866406955/avu91mvc87hplvhg7itui2ox/MechSounds-v20.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 
@@ -86,7 +89,7 @@ Everything is on the tray icon — no keyboard shortcuts.
 
 | Tray action | What it does |
 |---|---|
-| Right-click | Switch profile (type → switch submenus), toggle, start-with-Windows, exit |
+| Right-click | Switch profile (type → switch submenus), toggle, safe mode, start-with-Windows, exit |
 | Left-click | Reopen the chooser |
 
 ## Switch profiles

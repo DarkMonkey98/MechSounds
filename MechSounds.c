@@ -71,7 +71,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v19"
+#define MECHSOUNDS_VERSION "v20"
 
 /* Custom icon, embedded via mechsounds.rc (zig rc -> mechsounds.res).
    Resource 1 is the orange keycap icon; the exe file, the tray
@@ -86,6 +86,7 @@
 #define ID_TRAY_TOGGLE       1002
 #define ID_TRAY_CHOOSE       1003
 #define ID_TRAY_STARTUP      1004
+#define ID_TRAY_SAFEMODE     1005
 #define ID_TRAY_PROFILE_BASE 1100
 
 #define ID_CH_RADIO_BASE 2010
@@ -1131,11 +1132,19 @@ static BOOL is_game_foreground(void) {
     if (!fg)
         return FALSE;
     if (GetWindowRect(fg, &wr)) {
-        int sw = GetSystemMetrics(SM_CXSCREEN);
-        int sh = GetSystemMetrics(SM_CYSCREEN);
-        if (wr.left <= 0 && wr.top <= 0 &&
-            wr.right >= sw && wr.bottom >= sh)
-            game = TRUE;
+        /* Fullscreen means covering the monitor the window is on,
+           not just the primary screen — a borderless game on a
+           second monitor would otherwise slip past, because
+           GetSystemMetrics only reports the primary monitor. */
+        HMONITOR mon = MonitorFromWindow(fg, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFO mi;
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfoA(mon, &mi)) {
+            RECT mr = mi.rcMonitor;
+            if (wr.left <= mr.left && wr.top <= mr.top &&
+                wr.right >= mr.right && wr.bottom >= mr.bottom)
+                game = TRUE;
+        }
     }
     GetWindowThreadProcessId(fg, &pid);
     if (pid) {
@@ -1170,6 +1179,23 @@ static void game_check(void) {
         gamePaused = FALSE;
         update_tip();
         log_msg("game_check: game gone, hook reinstalled");
+    }
+}
+
+/* Safe mode = pauseInGames. One place that flips it, used by the
+   chooser checkbox and the tray menu: turning it off while paused
+   puts the hook back in at once; turning it on pauses right away
+   if a game is already in front. */
+static void set_safe_mode(BOOL on) {
+    pauseInGames = on;
+    save_settings();
+    if (!on && gamePaused) {
+        gamePaused = FALSE;
+        if (!hHook)
+            hHook = SetWindowsHookExA(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInst, 0);
+        update_tip();
+    } else if (on) {
+        game_check();
     }
 }
 
@@ -1264,6 +1290,8 @@ static void show_menu(void) {
     AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
     AppendMenuA(menu, MF_STRING | (enabled ? MF_CHECKED : MF_UNCHECKED),
                 ID_TRAY_TOGGLE, enabled ? "Sounds: On" : "Sounds: Off");
+    AppendMenuA(menu, MF_STRING | (pauseInGames ? MF_CHECKED : MF_UNCHECKED),
+                ID_TRAY_SAFEMODE, "Safe mode (pause in games)");
     AppendMenuA(menu, MF_STRING | (startup_enabled() ? MF_CHECKED : MF_UNCHECKED),
                 ID_TRAY_STARTUP, "Start with Windows");
     AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
@@ -1464,14 +1492,7 @@ static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             BOOL on = SendMessage((HWND)lp, BM_GETCHECK, 0, 0) == BST_CHECKED;
             set_startup(on);
         } else if (id == ID_CH_GAMEPAUSE && code == BN_CLICKED) {
-            pauseInGames = SendMessage((HWND)lp, BM_GETCHECK, 0, 0) == BST_CHECKED;
-            save_settings();
-            if (!pauseInGames && gamePaused) {
-                gamePaused = FALSE;
-                if (!hHook)
-                    hHook = SetWindowsHookExA(WH_KEYBOARD_LL, LowLevelKeyboardProc, hInst, 0);
-                update_tip();
-            }
+            set_safe_mode(SendMessage((HWND)lp, BM_GETCHECK, 0, 0) == BST_CHECKED);
         } else if (id == ID_CH_VOLUME && code == CBN_SELCHANGE) {
             int sel = (int)SendMessage((HWND)lp, CB_GETCURSEL, 0, 0);
             if (sel >= 0 && sel < NVOLUMES) {
@@ -1648,7 +1669,7 @@ static void create_chooser(void) {
     SendMessage(chk, BM_SETCHECK,
                 startup_enabled() ? BST_CHECKED : BST_UNCHECKED, 0);
 
-    HWND gchk = CreateWindowExA(0, "BUTTON", "Pause sounds automatically in games",
+    HWND gchk = CreateWindowExA(0, "BUTTON", "Safe mode - pause in games",
                                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
                                 16, 418, 300, 20,
                                 hwndChooser, (HMENU)ID_CH_GAMEPAUSE, hInst, NULL);
@@ -1740,6 +1761,8 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         } else if (LOWORD(wp) == ID_TRAY_TOGGLE) {
             enabled = !enabled;
             update_tip();
+        } else if (LOWORD(wp) == ID_TRAY_SAFEMODE) {
+            set_safe_mode(!pauseInGames);
         } else if (LOWORD(wp) == ID_TRAY_CHOOSE) {
             create_chooser();
         } else if (LOWORD(wp) == ID_TRAY_STARTUP) {
