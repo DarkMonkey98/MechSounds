@@ -1,6 +1,6 @@
 /* ============================================================
  * MechSounds.exe — standalone Windows keyboard sound player.
- * No AutoHotkey, no Python, no install. Just double-click it.
+ * No Python, no install. Just double-click it.
  *
  * Plays a mechanical switch sound on every keypress, in every
  * app, through the default audio device (your headphones).
@@ -58,10 +58,11 @@
  *
  * Build (Linux cross-compile with Zig):
  *   zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows \
- *     -o MechSounds.exe MechSounds.c -lwinmm -lgdi32
+ *     -o MechSounds.exe MechSounds.c -lwinmm -lgdi32 -lshell32 -lcomctl32
  * ============================================================ */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <commctrl.h>
 #include <mmsystem.h>
 #include <shellapi.h>
 #include <stdio.h>
@@ -70,7 +71,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v13"
+#define MECHSOUNDS_VERSION "v14"
 
 #define WM_TRAYICON  (WM_USER + 1)
 #define WM_PLAY_DOWN (WM_USER + 2)
@@ -89,6 +90,7 @@
 #define ID_CH_VOLUME  2005
 #define ID_CH_TEST    2006
 #define ID_CH_GAMEPAUSE 2008
+#define ID_CH_TAB     2009
 #define IDT_GAMECHECK  1
 #define ID_CH_SW      2030
 #define ID_CH_LUBE    2031
@@ -1066,6 +1068,46 @@ static const int ChooserOrder[NPROFILES] =
 static const int ChooserRadioY[NPROFILES] =
     { 48, 66, 84, 102, 120, 138, 156, 174, 192, 234, 276, 318, 336, 378, 396 };
 
+/* Profiles grouped by switch type, one tab per type in the chooser. */
+static const char *CatNames[5] = { "Linear", "Tactile", "Topre", "Clicky", "Hall Effect" };
+static const int CatProfs[5][9] = {
+    { 0, 1, 3, 6, 7, 8, 9, 10, 14 },
+    { 2 },
+    { 4 },
+    { 5, 12 },
+    { 11, 13 }
+};
+static const int CatCounts[5] = { 9, 1, 1, 2, 2 };
+
+/* Which tab (category) a profile index belongs to, or -1 for custom. */
+static int cat_of_profile(int prof) {
+    for (int c = 0; c < 5; c++)
+        for (int k = 0; k < CatCounts[c]; k++)
+            if (CatProfs[c][k] == prof)
+                return c;
+    return -1;
+}
+
+static HWND hwndTab;   /* the tab control in the chooser */
+static int curTab;     /* which tab is showing */
+
+/* Show only the radios for one tab (category); hide the rest. */
+static void show_tab(int tab) {
+    int start = 0;
+    curTab = tab;
+    if (hwndTab)
+        TabCtrl_SetCurSel(hwndTab, tab);
+    for (int c = 0; c < 5; c++) {
+        for (int k = 0; k < CatCounts[c]; k++) {
+            int i = start + k;  /* index into ChooserOrder */
+            HWND r = GetDlgItem(hwndChooser, ID_CH_RADIO_BASE + i);
+            if (r)
+                ShowWindow(r, c == tab ? SW_SHOW : SW_HIDE);
+        }
+        start += CatCounts[c];
+    }
+}
+
 static void set_custom_enabled(BOOL on) {
     if (!hwndChooser)
         return;
@@ -1106,6 +1148,12 @@ static void start_from_chooser(HWND h) {
 
 static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_NOTIFY: {
+        NMHDR *nm = (NMHDR *)lp;
+        if (nm->hwndFrom == hwndTab && nm->code == TCN_SELCHANGE)
+            show_tab(TabCtrl_GetCurSel(hwndTab));
+        break;
+    }
     case WM_COMMAND: {
         int id = LOWORD(wp), code = HIWORD(wp);
         if (id >= ID_CH_RADIO_BASE && id < ID_CH_RADIO_BASE + NCHOICES &&
@@ -1180,7 +1228,7 @@ static void create_chooser(void) {
         SetForegroundWindow(hwndChooser);
         return;
     }
-    int w = 400, hh = 728;
+    int w = 400, hh = 548;
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - hh) / 2;
     char title[64];
@@ -1200,41 +1248,65 @@ static void create_chooser(void) {
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
-    /* Category labels, then the radios grouped under them. */
-    static const char *catNames[] = { "Linear", "Tactile", "Topre", "Clicky", "Hall Effect" };
-    static const int catY[] = { 30, 216, 258, 300, 360 };
-    for (int i = 0; i < 5; i++) {
-        c = CreateWindowExA(0, "STATIC", catNames[i],
-                            WS_CHILD | WS_VISIBLE, 16, catY[i], 100, 16,
-                            hwndChooser, NULL, hInst, NULL);
-        SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
+    /* Tab control: one tab per switch type. The radios live inside
+       the tab's display area; only the active tab's radios show, so
+       a long list never gets cluttered. Radios, not a listbox: a
+       listbox runs a type-ahead search on every keypress, and a key
+       with no matching switch makes Windows play the error ding.
+       Radios never do that. */
+    hwndTab = CreateWindowExA(0, WC_TABCONTROL, NULL,
+                              WS_CHILD | WS_VISIBLE | TCS_TABS,
+                              12, 30, 376, 200,
+                              hwndChooser, (HMENU)ID_CH_TAB, hInst, NULL);
+    SendMessage(hwndTab, WM_SETFONT, (WPARAM)font, TRUE);
+    for (int c = 0; c < 5; c++) {
+        TCITEMA ti = {0};
+        ti.mask = TCIF_TEXT;
+        ti.pszText = (LPSTR)CatNames[c];
+        TabCtrl_InsertItem(hwndTab, c, &ti);
     }
-
-    /* Radio buttons, not a listbox: a listbox runs a type-ahead
-       search on every keypress, and a key with no matching switch
-       makes Windows play the error ding. Radios never do that. */
+    /* Display rect inside the tab control, where the radios go. */
+    RECT dr;
+    GetClientRect(hwndTab, &dr);
+    TabCtrl_AdjustRect(hwndTab, FALSE, &dr);
+    MapWindowPoints(hwndTab, hwndChooser, (POINT *)&dr, 2);
     chooserSel = curProfile;
-    for (int i = 0; i < NPROFILES; i++) {
-        DWORD style = WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON;
-        if (i == 0)
-            style |= WS_GROUP;
-        int prof = ChooserOrder[i];
-        c = CreateWindowExA(0, "BUTTON", ProfileNames[prof], style,
-                            28, ChooserRadioY[i], 356, 20,
-                            hwndChooser, (HMENU)(ID_CH_RADIO_BASE + i), hInst, NULL);
-        SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-        if (prof == curProfile)
-            SendMessage(c, BM_SETCHECK, BST_CHECKED, 0);
+    {
+        int start = 0;
+        for (int c = 0; c < 5; c++) {
+            for (int k = 0; k < CatCounts[c]; k++) {
+                int i = start + k;
+                int prof = CatProfs[c][k];
+                DWORD style = WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON;
+                if (i == 0)
+                    style |= WS_GROUP;
+                HWND r = CreateWindowExA(0, "BUTTON", ProfileNames[prof], style,
+                                        dr.left + 12, dr.top + 4 + k * 18,
+                                        dr.right - dr.left - 24, 20,
+                                        hwndChooser, (HMENU)(ID_CH_RADIO_BASE + i), hInst, NULL);
+                SendMessage(r, WM_SETFONT, (WPARAM)font, TRUE);
+                if (prof == curProfile)
+                    SendMessage(r, BM_SETCHECK, BST_CHECKED, 0);
+            }
+            start += CatCounts[c];
+        }
+    }
+    /* Open on the tab holding the current switch (or Linear). */
+    {
+        int tab = (curProfile < NPROFILES) ? cat_of_profile(curProfile) : 0;
+        if (tab < 0)
+            tab = 0;
+        show_tab(tab);
     }
 
     c = CreateWindowExA(0, "STATIC", "- or build your own -",
-                        WS_CHILD | WS_VISIBLE, 16, 420, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 240, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Custom build - tune it below",
                         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-                        16, 438, 368, 20,
+                        16, 258, 368, 20,
                         hwndChooser, (HMENU)(ID_CH_RADIO_BASE + NPROFILES), hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     if (curProfile == CUSTOM_INDEX)
@@ -1245,35 +1317,35 @@ static void create_chooser(void) {
     static const char *caseItems[] = { "Plastic", "Aluminum", "Brass" };
     static const char *modItems[] = { "None", "Tape mod", "O-rings", "Tape + O-rings" };
     c = CreateWindowExA(0, "STATIC", "Switch:",
-                        WS_CHILD | WS_VISIBLE, 16, 464, 48, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 284, 48, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_SW, 66, 462, 118, swItems, 3, customSwitch);
+    make_combo(hwndChooser, ID_CH_SW, 66, 282, 118, swItems, 3, customSwitch);
     c = CreateWindowExA(0, "STATIC", "Lube:",
-                        WS_CHILD | WS_VISIBLE, 204, 464, 42, 16,
+                        WS_CHILD | WS_VISIBLE, 204, 284, 42, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_LUBE, 248, 462, 118, lubeItems, 2, customLube);
+    make_combo(hwndChooser, ID_CH_LUBE, 248, 282, 118, lubeItems, 2, customLube);
     c = CreateWindowExA(0, "STATIC", "Case:",
-                        WS_CHILD | WS_VISIBLE, 16, 492, 48, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 312, 48, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_CASE, 66, 490, 118, caseItems, 3, customCase);
+    make_combo(hwndChooser, ID_CH_CASE, 66, 310, 118, caseItems, 3, customCase);
     c = CreateWindowExA(0, "STATIC", "Mods:",
-                        WS_CHILD | WS_VISIBLE, 204, 492, 42, 16,
+                        WS_CHILD | WS_VISIBLE, 204, 312, 42, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_MODS, 248, 490, 118, modItems, 4, customMods);
+    make_combo(hwndChooser, ID_CH_MODS, 248, 310, 118, modItems, 4, customMods);
     set_custom_enabled(curProfile == CUSTOM_INDEX);
 
     c = CreateWindowExA(0, "STATIC", "Volume:",
-                        WS_CHILD | WS_VISIBLE, 16, 526, 56, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 346, 56, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     HWND vol = CreateWindowExA(0, "COMBOBOX", NULL,
                                WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-                               78, 524, 100, 120,
+                               78, 344, 100, 120,
                                hwndChooser, (HMENU)ID_CH_VOLUME, hInst, NULL);
     SendMessage(vol, WM_SETFONT, (WPARAM)font, TRUE);
     const char *volNames[] = { "100%", "80%", "60%", "40%", "20%" };
@@ -1287,7 +1359,7 @@ static void create_chooser(void) {
 
     HWND chk = CreateWindowExA(0, "BUTTON", "Start MechSounds with Windows",
                                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                               16, 554, 260, 20,
+                               16, 374, 260, 20,
                                hwndChooser, (HMENU)ID_CH_STARTUP, hInst, NULL);
     SendMessage(chk, WM_SETFONT, (WPARAM)font, TRUE);
     SendMessage(chk, BM_SETCHECK,
@@ -1295,29 +1367,29 @@ static void create_chooser(void) {
 
     HWND gchk = CreateWindowExA(0, "BUTTON", "Pause sounds automatically in games",
                                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                16, 578, 300, 20,
+                                16, 398, 300, 20,
                                 hwndChooser, (HMENU)ID_CH_GAMEPAUSE, hInst, NULL);
     SendMessage(gchk, WM_SETFONT, (WPARAM)font, TRUE);
     SendMessage(gchk, BM_SETCHECK,
                 pauseInGames ? BST_CHECKED : BST_UNCHECKED, 0);
 
     c = CreateWindowExA(0, "STATIC", "Start hides this window - sounds keep playing",
-                        WS_CHILD | WS_VISIBLE, 16, 610, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 430, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "STATIC", "from the tray icon. Double-click the tray icon to pick again.",
-                        WS_CHILD | WS_VISIBLE, 16, 628, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 448, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Start",
                         WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                        216, 654, 80, 26,
+                        216, 474, 80, 26,
                         hwndChooser, (HMENU)ID_CH_START, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "BUTTON", "Quit",
                         WS_CHILD | WS_VISIBLE,
-                        304, 654, 80, 26,
+                        304, 474, 80, 26,
                         hwndChooser, (HMENU)ID_CH_QUIT, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
@@ -1421,6 +1493,11 @@ int WINAPI WinMain(HINSTANCE hi, HINSTANCE hPrev, LPSTR cmd, int show) {
     (void)hPrev;
     (void)show;
     hInst = hi;
+
+    {
+        INITCOMMONCONTROLSEX ice = { sizeof(ice), ICC_TAB_CLASSES };
+        InitCommonControlsEx(&ice);
+    }
 
     GetModuleFileNameA(NULL, exeDir, MAX_PATH);
     s = strrchr(exeDir, '\\');

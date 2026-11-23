@@ -1,5 +1,5 @@
 """MechSounds.py — system-wide mechanical keyboard sounds for Windows.
-No AutoHotkey needed. Needs Python 3 (python.org) — standard library only.
+Needs Python 3 (python.org) — standard library only.
 
 Plays a switch sound on every keypress, in every app, through your
 default audio device (so it comes through your headphones). Works with
