@@ -29,7 +29,7 @@ never pause (the setting is remembered).
 
 ## Get it
 
-[Download MechSounds v18](https://muse.ai/files/1323371437529100/3696295357190302/fhkm9dy9vaevkfxe15mytapn/MechSounds-v18.zip) — ready-to-run zip (exe + sounds).
+[Download MechSounds v19](https://muse.ai/files/1323371437529100/1111020011695439/hx9850wu7ogfbmi9657z7uph/MechSounds-v19.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 

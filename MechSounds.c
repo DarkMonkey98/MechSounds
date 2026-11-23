@@ -71,7 +71,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v18"
+#define MECHSOUNDS_VERSION "v19"
 
 /* Custom icon, embedded via mechsounds.rc (zig rc -> mechsounds.res).
    Resource 1 is the orange keycap icon; the exe file, the tray
@@ -97,10 +97,16 @@
 #define ID_CH_GAMEPAUSE 2008
 #define ID_CH_TAB     2009
 #define IDT_GAMECHECK  1
-#define ID_CH_SW      2030
-#define ID_CH_LUBE    2031
-#define ID_CH_CASE    2032
-#define ID_CH_MODS    2033
+/* Control IDs: radios take 2010-2054 (ID_CH_RADIO_BASE + 0..44),
+   so nothing else may use that range. The custom-build combos
+   used to be 2030-2033, which collided with the Topre radios
+   (chooser-order 20-23 = IDs 2030-2033): every preset click ran
+   set_custom_enabled(FALSE), which disabled all four Topre
+   radios via GetDlgItem. That was the Topre grey-out bug. */
+#define ID_CH_SW      2100
+#define ID_CH_LUBE    2101
+#define ID_CH_CASE    2102
+#define ID_CH_MODS    2103
 
 /* sounds: 6 down variants + space, loaded as PCM in memory.
    Per-key sounds: one recording per physical key, from the pack's
@@ -1394,6 +1400,20 @@ static void start_from_chooser(HWND h) {
     hwndChooser = NULL;
 }
 
+/* Manual radio buttons (BS_RADIOBUTTON, not AUTO): the check state
+   is managed here, not by Windows. All 45 radios were one auto
+   group, and Windows disables siblings when the checked radio
+   moves between hidden tabs — first the Topre tab greyed out on
+   switch (v16), then clicking a Topre radio greyed the other
+   Topre radios (v18). Manual radios never do that. */
+static void check_chooser_radio(int sel) {
+    for (int i = 0; i <= rtNProfiles; i++) {
+        HWND r = GetDlgItem(hwndChooser, ID_CH_RADIO_BASE + i);
+        if (r)
+            SendMessage(r, BM_SETCHECK, (i == sel) ? BST_CHECKED : BST_UNCHECKED, 0);
+    }
+}
+
 static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_NOTIFY: {
@@ -1411,11 +1431,13 @@ static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 /* Preset: clicking one selects it AND previews it. */
                 chooserSel = RTChooserOrder[sel];
                 set_custom_enabled(FALSE);
+                check_chooser_radio(sel);
                 preview_profile(chooserSel);
             } else {
                 /* Custom build: enable the tuners and preview it. */
                 chooserSel = customIndex;
                 set_custom_enabled(TRUE);
+                check_chooser_radio(sel);
                 preview_custom();
             }
         } else if ((id == ID_CH_SW || id == ID_CH_LUBE ||
@@ -1538,7 +1560,7 @@ static void create_chooser(void) {
             for (int k = 0; k < RTCatCounts[c]; k++) {
                 int i = start + k;
                 int prof = RTCatProfs[c][k];
-                DWORD style = WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON;
+                DWORD style = WS_CHILD | WS_VISIBLE | BS_RADIOBUTTON;
                 if (i == 0)
                     style |= WS_GROUP;
                 HWND r = CreateWindowExA(0, "BUTTON", RTNames[prof], style,
@@ -1566,7 +1588,7 @@ static void create_chooser(void) {
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Custom build - tune it below",
-                        WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
+                        WS_CHILD | WS_VISIBLE | BS_RADIOBUTTON,
                         16, 278, 368, 20,
                         hwndChooser, (HMENU)(ID_CH_RADIO_BASE + rtNProfiles), hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
