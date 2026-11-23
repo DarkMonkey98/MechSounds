@@ -11,10 +11,9 @@ a real mechanical switch to your normal audio output.
 
 ## Get it
 
-Download the latest release (exe + sounds, ready to run) from the
-[Releases](../../releases) page, or build it yourself from the source
-below. The exe needs a `sounds/` folder next to it — see
-[Sound packs](#sound-packs).
+Build the exe from the source below, or grab the ready-to-run zip
+(exe + sounds) from the repo owner. The exe needs a `sounds/` folder
+next to it — see [Sound packs](#sound-packs).
 
 ## Build it
 
@@ -156,12 +155,7 @@ click 100–200 ms into the window.
 
 - `MechSounds.c` — the app. Builds with Zig (see above).
 - `MechSounds.py` — same app as a Python script (stdlib only).
-  Run `python MechSounds.py` next to a `sounds/` folder. Starts on
-  Rainy 75 Pro with no chooser window; the chooser and
-  start-with-Windows options are exe-only.
-- `MechSounds.ahk` — same app as an AutoHotkey v2 script.
-  Install AutoHotkey v2, then double-click it. Same as the Python
-  version: starts on Rainy 75 Pro, no chooser window.
+  Run `python MechSounds.py` next to a `sounds/` folder.
 - `build_real_profiles.py` — converts Mechvibes packs in
   `real-packs/` into the `sounds/` profiles
 - `synth_sounds.py` — the old script that synthesized switch sounds;
