@@ -71,7 +71,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v17"
+#define MECHSOUNDS_VERSION "v18"
 
 /* Custom icon, embedded via mechsounds.rc (zig rc -> mechsounds.res).
    Resource 1 is the orange keycap icon; the exe file, the tray
@@ -136,6 +136,11 @@ static char RTNames[MAX_PROFILES][128];
 static int RTCat[MAX_PROFILES];
 static int rtNProfiles = NPROFILES_BUILTIN;
 static int customIndex = NPROFILES_BUILTIN;   /* == rtNProfiles */
+
+/* Runtime tab groups, rebuilt from the runtime profile table. */
+static int RTCatProfs[5][MAX_PROFILES];
+static int RTCatCounts[5];
+static int RTChooserOrder[MAX_PROFILES];  /* profiles ordered by category */
 
 static void init_runtime_profiles(void);  /* defined in the chooser section */
 
@@ -985,7 +990,16 @@ static void preview_profile(int i) {
         return;
     snprintf(path, sizeof(path), "%s\\sounds\\%s\\down1.wav",
              exeDir, RTFolders[i]);
-    PlaySoundA(path, NULL, SND_FILENAME | SND_ASYNC);
+    if (GetFileAttributesA(path) == INVALID_FILE_ATTRIBUTES) {
+        /* Missing file: fall back to Rainy75 so a click still plays
+           a sound, and log it — a missing profile file means the
+           sounds folder is incomplete, not that the profile is bad. */
+        log_msg("preview_profile: %s missing, falling back to Rainy75", path);
+        snprintf(path, sizeof(path), "%s\\sounds\\Rainy75\\down1.wav", exeDir);
+    }
+    /* SND_NODEFAULT: a missing file stays silent, it never plays
+       the Windows default ding. */
+    PlaySoundA(path, NULL, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 }
 
 static void preview_custom(void) {
@@ -997,7 +1011,7 @@ static void preview_custom(void) {
         key[2] == customCase && key[3] == customMods) {
         /* Same tuners -- replay the temp file written last time. */
         snprintf(tmp, sizeof(tmp), "%s\\preview.wav", tempDir);
-        PlaySoundA(tmp, NULL, SND_FILENAME | SND_ASYNC);
+        PlaySoundA(tmp, NULL, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
         return;
     }
     snprintf(path, sizeof(path), "%s\\sounds\\%s\\down1.wav",
@@ -1013,7 +1027,7 @@ static void preview_custom(void) {
     key[1] = customLube;
     key[2] = customCase;
     key[3] = customMods;
-    PlaySoundA(tmp, NULL, SND_FILENAME | SND_ASYNC);
+    PlaySoundA(tmp, NULL, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 }
 
 /* ---------------- keyboard hook: post and return, nothing else ---- */
@@ -1219,21 +1233,31 @@ static void show_balloon(const char *text) {
 
 static void show_menu(void) {
     HMENU menu = CreatePopupMenu();
-    HMENU sub = CreatePopupMenu();
+    HMENU profMenu = CreatePopupMenu();
     POINT pt;
-    /* Profiles live in a submenu so they scroll on their own; the
-       bottom options (toggle, chooser, startup, exit) stay in the
-       main menu and are always visible, never scrolled away. */
-    for (int i = 0; i < rtNProfiles; i++)
-        AppendMenuA(sub, MF_STRING | (i == curProfile ? MF_CHECKED : MF_UNCHECKED),
-                    ID_TRAY_PROFILE_BASE + i, RTNames[i]);
-    AppendMenuA(sub, MF_STRING | (curProfile == customIndex ? MF_CHECKED : MF_UNCHECKED),
-                ID_TRAY_PROFILE_BASE + customIndex, "Custom build...");
-    AppendMenuA(menu, MF_STRING | MF_POPUP, (UINT_PTR)sub, "Switch profile");
+    /* Profiles grouped by key type, each type a submenu that expands
+       into that type's profiles. The bottom options (toggle, startup,
+       exit) stay in the main menu and are always visible, never
+       scrolled away. */
+    {
+        static const char *catNames[5] = { "Linear", "Tactile", "Topre", "Clicky", "Hall Effect" };
+        for (int c = 0; c < 5; c++) {
+            HMENU sub = CreatePopupMenu();
+            for (int k = 0; k < RTCatCounts[c]; k++) {
+                int prof = RTCatProfs[c][k];
+                AppendMenuA(sub, MF_STRING | (prof == curProfile ? MF_CHECKED : MF_UNCHECKED),
+                            ID_TRAY_PROFILE_BASE + prof, RTNames[prof]);
+            }
+            AppendMenuA(profMenu, MF_STRING | MF_POPUP, (UINT_PTR)sub, catNames[c]);
+        }
+        AppendMenuA(profMenu, MF_SEPARATOR, 0, NULL);
+        AppendMenuA(profMenu, MF_STRING | (curProfile == customIndex ? MF_CHECKED : MF_UNCHECKED),
+                    ID_TRAY_PROFILE_BASE + customIndex, "Custom build...");
+    }
+    AppendMenuA(menu, MF_STRING | MF_POPUP, (UINT_PTR)profMenu, "Switch profile");
     AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
     AppendMenuA(menu, MF_STRING | (enabled ? MF_CHECKED : MF_UNCHECKED),
                 ID_TRAY_TOGGLE, enabled ? "Sounds: On" : "Sounds: Off");
-    AppendMenuA(menu, MF_STRING, ID_TRAY_CHOOSE, "Choose profile...");
     AppendMenuA(menu, MF_STRING | (startup_enabled() ? MF_CHECKED : MF_UNCHECKED),
                 ID_TRAY_STARTUP, "Start with Windows");
     AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
@@ -1270,11 +1294,6 @@ static int builtin_cat(int prof) {
                 return c;
     return 0;
 }
-
-/* Runtime tab groups, rebuilt from the runtime profile table. */
-static int RTCatProfs[5][MAX_PROFILES];
-static int RTCatCounts[5];
-static int RTChooserOrder[MAX_PROFILES];  /* profiles ordered by category */
 
 static void rebuild_tab_groups(void) {
     int c, i, ord = 0;

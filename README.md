@@ -29,7 +29,7 @@ never pause (the setting is remembered).
 
 ## Get it
 
-[Download MechSounds v17](https://muse.ai/files/1323371437529100/29232673083066249/daoizaa8n84xplehdpe03lfj/MechSounds-v17.zip) — ready-to-run zip (exe + sounds).
+[Download MechSounds v18](https://muse.ai/files/1323371437529100/3696295357190302/fhkm9dy9vaevkfxe15mytapn/MechSounds-v18.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 
@@ -72,7 +72,10 @@ Your pick and volume are remembered for next time.
   with Windows it skips the chooser and just starts playing with
   your last saved switch and volume.
 - **Change switches later:** click the tray icon to reopen
-  the chooser, or right-click it and pick a switch from the menu.
+  the chooser, or right-click it → **Switch profile** → pick a
+  switch type (Linear, Tactile, Topre, Clicky, Hall Effect) →
+  pick a switch. The bottom options (toggle, start-with-Windows,
+  exit) always stay visible in the main menu, never scrolled away.
 - **Exit really exits:** right-click the tray icon → **Exit** ends
   the process completely, so the folder can be deleted right after
   — no more hunting in Task Manager.
@@ -83,7 +86,7 @@ Everything is on the tray icon — no keyboard shortcuts.
 
 | Tray action | What it does |
 |---|---|
-| Right-click | Switch profile (submenu — scrolls), toggle, chooser, start-with-Windows, exit |
+| Right-click | Switch profile (type → switch submenus), toggle, start-with-Windows, exit |
 | Left-click | Reopen the chooser |
 
 ## Switch profiles
