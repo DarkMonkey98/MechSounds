@@ -11,9 +11,12 @@ a real mechanical switch to your normal audio output.
 
 ## Get it
 
-Build the exe from the source below, or grab the ready-to-run zip
-(exe + sounds) from the repo owner. The exe needs a `sounds/` folder
-next to it — see [Sound packs](#sound-packs).
+Download the ready-to-run zip (exe + sounds) from
+[Releases](https://github.com/DarkMonkey98/MechSounds/releases).
+Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
+folder must stay next to the exe.
+
+Or build the exe from the source below.
 
 ## Build it
 
@@ -123,43 +126,6 @@ This is built so the sound never lags behind your fingers:
   tooltip (avg/max ms). The rest is Windows audio output, typically
   10–30 ms — total stays well under the ~50 ms where typing starts
   to feel disconnected from its sound.
-
-## Sound packs
-
-The recordings are **not in this repo** — the MechVibes packs are
-free for personal use only, and their licenses don't allow
-redistribution. To get sounds:
-
-1. Download a pack from [Mechvibes](https://mechvibes.com/sound-packs).
-2. Drop the zip in `real-packs/`, add a line to
-   `build_real_profiles.py`, and run it — it writes
-   `sounds/<Name>/down1-6.wav` and `space1.wav` (44.1 kHz mono WAVs).
-3. Add the name to the profile list in `MechSounds.c`
-   (and `MechSounds.py` / `MechSounds.ahk` if you use those).
-
-Packs used in the release build:
-- Rainy 75 Pro (Kailh Cocoa) — WOB Rainy 75 Pro
-- NK Cream — NovelKeys Cream
-- Crystal Panda — Keychron V1 Crystal Panda
-- Everglide Oreo — EG Oreo
-- HHKB Topre 45g — HHKB Pro 2 with stock Topre 45g
-- IBM Model M — IBM Model M 1985, buckling spring
-- Leobog Reaper — Aula F75 Max, Leobog Reaper switches
-- Keychron Q3 — Keychron Q3, Gateron G Pro Red
-- Ikki68 Aurora (Orange deluxe) — Wuque Studio Ikki68 Aurora, C3 Tangerine
-- Aula F75 — Aula F75, creamy
-- Custom keyboard (Creamy thingy) — custom board, Generic linear
-- Gravastar V60 Pro — GravaStar V60 Pro, GravaStar Hall Effect
-- HyperX Alloy — HyperX Alloy, Cherry MX Blue
-- Wooting 60HE — Wooting 60HE, Lekker L60 Hall Effect
-- Epomaker TH85 (Creamy Jade) — Epomaker TH85, Epomaker Creamy Jade
-
-Crystal Panda's and IBM Model M's exact Mechvibes pack pages
-couldn't be pinned down, so their links in the app point to the
-Mechvibes pack library instead of a guessed URL.
-
-Each clip is cut around its loudest point, since some packs hide the
-click 100–200 ms into the window.
 
 ## Notes
 
