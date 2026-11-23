@@ -71,7 +71,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v20"
+#define MECHSOUNDS_VERSION "v21"
 
 /* Custom icon, embedded via mechsounds.rc (zig rc -> mechsounds.res).
    Resource 1 is the orange keycap icon; the exe file, the tray
@@ -1291,7 +1291,7 @@ static void show_menu(void) {
     AppendMenuA(menu, MF_STRING | (enabled ? MF_CHECKED : MF_UNCHECKED),
                 ID_TRAY_TOGGLE, enabled ? "Sounds: On" : "Sounds: Off");
     AppendMenuA(menu, MF_STRING | (pauseInGames ? MF_CHECKED : MF_UNCHECKED),
-                ID_TRAY_SAFEMODE, "Safe mode (pause in games)");
+                ID_TRAY_SAFEMODE, "Turn off sounds in games");
     AppendMenuA(menu, MF_STRING | (startup_enabled() ? MF_CHECKED : MF_UNCHECKED),
                 ID_TRAY_STARTUP, "Start with Windows");
     AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
@@ -1524,7 +1524,7 @@ static void create_chooser(void) {
         SetForegroundWindow(hwndChooser);
         return;
     }
-    int w = 400, hh = 568;
+    int w = 400, hh = 584;
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - hh) / 2;
     char title[64];
@@ -1669,31 +1669,31 @@ static void create_chooser(void) {
     SendMessage(chk, BM_SETCHECK,
                 startup_enabled() ? BST_CHECKED : BST_UNCHECKED, 0);
 
-    HWND gchk = CreateWindowExA(0, "BUTTON", "Safe mode - pause in games",
-                                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                16, 418, 300, 20,
+    HWND gchk = CreateWindowExA(0, "BUTTON", "Turn off sounds in games\n(if it detects a hook-sensitive program)",
+                                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX | BS_MULTILINE,
+                                16, 418, 368, 36,
                                 hwndChooser, (HMENU)ID_CH_GAMEPAUSE, hInst, NULL);
     SendMessage(gchk, WM_SETFONT, (WPARAM)font, TRUE);
     SendMessage(gchk, BM_SETCHECK,
                 pauseInGames ? BST_CHECKED : BST_UNCHECKED, 0);
 
     c = CreateWindowExA(0, "STATIC", "Start hides this window - sounds keep playing",
-                        WS_CHILD | WS_VISIBLE, 16, 450, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 466, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "STATIC", "from the tray icon. Click the tray icon to pick again.",
-                        WS_CHILD | WS_VISIBLE, 16, 468, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 484, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Start",
                         WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                        216, 494, 80, 26,
+                        216, 510, 80, 26,
                         hwndChooser, (HMENU)ID_CH_START, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "BUTTON", "Quit",
                         WS_CHILD | WS_VISIBLE,
-                        304, 494, 80, 26,
+                        304, 510, 80, 26,
                         hwndChooser, (HMENU)ID_CH_QUIT, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
