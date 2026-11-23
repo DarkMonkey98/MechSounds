@@ -70,7 +70,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v11"
+#define MECHSOUNDS_VERSION "v12"
 
 #define WM_TRAYICON  (WM_USER + 1)
 #define WM_PLAY_DOWN (WM_USER + 2)
@@ -88,7 +88,6 @@
 #define ID_CH_STARTUP 2004
 #define ID_CH_VOLUME  2005
 #define ID_CH_TEST    2006
-#define ID_CH_LINK    2007
 #define ID_CH_GAMEPAUSE 2008
 #define IDT_GAMECHECK  1
 #define ID_CH_SW      2030
@@ -141,27 +140,6 @@ static const char *ProfileNames[] = {
     "HyperX Alloy - Cherry MX Blue",
     "Wooting 60HE - Lekker L60 Hall Effect",
     "Epomaker TH85 - Creamy Jade"
-};
-/* MechVibes page for each profile, shown as a link in the chooser.
-   CrystalPanda and ModelM link to the pack library — their exact
-   pack pages could not be pinned down, so the library is the
-   fallback rather than a guessed URL. */
-static const char *ProfileURLs[] = {
-    "https://mechvibes.com/sound-packs/that-is-the-creamiest-i-ever-do-wtf-wob-rainy-75-pro-fr4-kailh-cocoa-by",
-    "https://mechvibes.com/sound-packs/custom-sound-pack-1203000000038/",
-    "https://mechvibes.com/sound-packs",
-    "https://mechvibes.com/sound-packs/eg-oreo",
-    "https://mechvibes.com/sound-packs/hhkb-hybrid-topre",
-    "https://mechvibes.com/sound-packs",
-    "https://mechvibes.com/sound-packs/aula-f75-max-leobog-reaper-switch",
-    "https://mechvibes.com/sound-packs/amazin-keychron-q3-bluex",
-    "https://mechvibes.com/sound-packs/orange-deluxe",
-    "https://mechvibes.com/sound-packs/aula-f75",
-    "https://mechvibes.com/sound-packs/creamy-thingy",
-    "https://mechvibes.com/sound-packs/gravastar-v60-pro-lubed",
-    "https://mechvibes.com/sound-packs/hyperx-alloy-cherry-mx-blue",
-    "https://mechvibes.com/sound-packs/wooting-60he-v2",
-    "https://mechvibes.com/sound-packs/epomaker-creamy-jade"
 };
 #define NPROFILES 15
 
@@ -1085,7 +1063,6 @@ static void show_menu(void) {
 /* ---------------- chooser window ---------------------------------- */
 
 static void create_chooser(void);
-static void update_mv_link(void);
 
 /* chooser display order, grouped by switch type:
    Linear: Rainy75, NKCream, Oreo, Reaper, KeychronQ3, OrangeDeluxe,
@@ -1137,16 +1114,6 @@ static void start_from_chooser(HWND h) {
 
 static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
-    case WM_CTLCOLORSTATIC: {
-        /* The MechVibes link renders in blue like a hyperlink. */
-        if ((HWND)lp == GetDlgItem(h, ID_CH_LINK)) {
-            HDC dc = (HDC)wp;
-            SetTextColor(dc, RGB(0, 0, 238));
-            SetBkMode(dc, TRANSPARENT);
-            return (LRESULT)GetStockObject(NULL_BRUSH);
-        }
-        break;
-    }
     case WM_COMMAND: {
         int id = LOWORD(wp), code = HIWORD(wp);
         if (id >= ID_CH_RADIO_BASE && id < ID_CH_RADIO_BASE + NCHOICES &&
@@ -1163,7 +1130,6 @@ static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 set_custom_enabled(TRUE);
                 preview_custom();
             }
-            update_mv_link();
         } else if ((id == ID_CH_SW || id == ID_CH_LUBE ||
                     id == ID_CH_CASE || id == ID_CH_MODS) &&
                    code == CBN_SELCHANGE) {
@@ -1180,10 +1146,6 @@ static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 customMods = s;
             if (chooserSel == CUSTOM_INDEX)
                 preview_custom();
-        } else if (id == ID_CH_LINK && code == STN_CLICKED) {
-            if (chooserSel >= 0 && chooserSel < NPROFILES)
-                ShellExecuteA(h, "open", ProfileURLs[chooserSel],
-                              NULL, NULL, SW_SHOWNORMAL);
         } else if (id == ID_CH_START && code == BN_CLICKED) {
             start_from_chooser(h);
         } else if (id == ID_CH_QUIT && code == BN_CLICKED) {
@@ -1221,33 +1183,12 @@ static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 
-/* MechVibes link under the preset list: shows the selected preset's
-   pack page, opens it in the browser on click. Hidden for the
-   custom build, which has no pack page. */
-static void update_mv_link(void) {
-    HWND link;
-    char buf[256];
-    if (!hwndChooser)
-        return;
-    link = GetDlgItem(hwndChooser, ID_CH_LINK);
-    if (!link)
-        return;
-    if (chooserSel >= 0 && chooserSel < NPROFILES) {
-        snprintf(buf, sizeof(buf), "View %s on MechVibes",
-                 ProfileNames[chooserSel]);
-        SetWindowTextA(link, buf);
-        ShowWindow(link, SW_SHOW);
-    } else {
-        ShowWindow(link, SW_HIDE);
-    }
-}
-
 static void create_chooser(void) {
     if (hwndChooser) {
         SetForegroundWindow(hwndChooser);
         return;
     }
-    int w = 400, hh = 750;
+    int w = 400, hh = 728;
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - hh) / 2;
     char title[64];
@@ -1294,28 +1235,14 @@ static void create_chooser(void) {
             SendMessage(c, BM_SETCHECK, BST_CHECKED, 0);
     }
 
-    /* Link to the selected preset's MechVibes pack page. */
-    {
-        HFONT linkFont;
-        LOGFONTA lf;
-        GetObjectA(font, sizeof(lf), &lf);
-        lf.lfUnderline = TRUE;
-        linkFont = CreateFontIndirectA(&lf);
-        c = CreateWindowExA(0, "STATIC", "View on MechVibes",
-                            WS_CHILD | WS_VISIBLE | SS_NOTIFY, 16, 420, 368, 16,
-                            hwndChooser, (HMENU)ID_CH_LINK, hInst, NULL);
-        SendMessage(c, WM_SETFONT, (WPARAM)linkFont, TRUE);
-    }
-    update_mv_link();
-
     c = CreateWindowExA(0, "STATIC", "- or build your own -",
-                        WS_CHILD | WS_VISIBLE, 16, 442, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 420, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Custom build - tune it below",
                         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-                        16, 460, 368, 20,
+                        16, 438, 368, 20,
                         hwndChooser, (HMENU)(ID_CH_RADIO_BASE + NPROFILES), hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     if (curProfile == CUSTOM_INDEX)
@@ -1326,35 +1253,35 @@ static void create_chooser(void) {
     static const char *caseItems[] = { "Plastic", "Aluminum", "Brass" };
     static const char *modItems[] = { "None", "Tape mod", "O-rings", "Tape + O-rings" };
     c = CreateWindowExA(0, "STATIC", "Switch:",
-                        WS_CHILD | WS_VISIBLE, 16, 486, 48, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 464, 48, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_SW, 66, 484, 118, swItems, 3, customSwitch);
+    make_combo(hwndChooser, ID_CH_SW, 66, 462, 118, swItems, 3, customSwitch);
     c = CreateWindowExA(0, "STATIC", "Lube:",
-                        WS_CHILD | WS_VISIBLE, 204, 486, 42, 16,
+                        WS_CHILD | WS_VISIBLE, 204, 464, 42, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_LUBE, 248, 484, 118, lubeItems, 2, customLube);
+    make_combo(hwndChooser, ID_CH_LUBE, 248, 462, 118, lubeItems, 2, customLube);
     c = CreateWindowExA(0, "STATIC", "Case:",
-                        WS_CHILD | WS_VISIBLE, 16, 514, 48, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 492, 48, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_CASE, 66, 512, 118, caseItems, 3, customCase);
+    make_combo(hwndChooser, ID_CH_CASE, 66, 490, 118, caseItems, 3, customCase);
     c = CreateWindowExA(0, "STATIC", "Mods:",
-                        WS_CHILD | WS_VISIBLE, 204, 514, 42, 16,
+                        WS_CHILD | WS_VISIBLE, 204, 492, 42, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_MODS, 248, 512, 118, modItems, 4, customMods);
+    make_combo(hwndChooser, ID_CH_MODS, 248, 490, 118, modItems, 4, customMods);
     set_custom_enabled(curProfile == CUSTOM_INDEX);
 
     c = CreateWindowExA(0, "STATIC", "Volume:",
-                        WS_CHILD | WS_VISIBLE, 16, 548, 56, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 526, 56, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     HWND vol = CreateWindowExA(0, "COMBOBOX", NULL,
                                WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-                               78, 546, 100, 120,
+                               78, 524, 100, 120,
                                hwndChooser, (HMENU)ID_CH_VOLUME, hInst, NULL);
     SendMessage(vol, WM_SETFONT, (WPARAM)font, TRUE);
     const char *volNames[] = { "100%", "80%", "60%", "40%", "20%" };
@@ -1368,7 +1295,7 @@ static void create_chooser(void) {
 
     HWND chk = CreateWindowExA(0, "BUTTON", "Start MechSounds with Windows",
                                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                               16, 576, 260, 20,
+                               16, 554, 260, 20,
                                hwndChooser, (HMENU)ID_CH_STARTUP, hInst, NULL);
     SendMessage(chk, WM_SETFONT, (WPARAM)font, TRUE);
     SendMessage(chk, BM_SETCHECK,
@@ -1376,29 +1303,29 @@ static void create_chooser(void) {
 
     HWND gchk = CreateWindowExA(0, "BUTTON", "Pause sounds automatically in games",
                                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                16, 600, 300, 20,
+                                16, 578, 300, 20,
                                 hwndChooser, (HMENU)ID_CH_GAMEPAUSE, hInst, NULL);
     SendMessage(gchk, WM_SETFONT, (WPARAM)font, TRUE);
     SendMessage(gchk, BM_SETCHECK,
                 pauseInGames ? BST_CHECKED : BST_UNCHECKED, 0);
 
     c = CreateWindowExA(0, "STATIC", "Start hides this window - sounds keep playing",
-                        WS_CHILD | WS_VISIBLE, 16, 632, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 610, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "STATIC", "from the tray icon. Double-click the tray icon to pick again.",
-                        WS_CHILD | WS_VISIBLE, 16, 650, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 628, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Start",
                         WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                        216, 676, 80, 26,
+                        216, 654, 80, 26,
                         hwndChooser, (HMENU)ID_CH_START, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "BUTTON", "Quit",
                         WS_CHILD | WS_VISIBLE,
-                        304, 676, 80, 26,
+                        304, 654, 80, 26,
                         hwndChooser, (HMENU)ID_CH_QUIT, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 

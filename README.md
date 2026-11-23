@@ -9,6 +9,8 @@ sounds through a MacBook trackpad). Same idea, different trick: instead
 of trackpad haptics, MechSounds listens to your key presses system-wide and plays a recording of
 a real mechanical switch to your normal audio output.
 
+![MechSounds chooser - pick a switch, or build your own](screenshot.png)
+
 ## Game-safe
 
 Anticheat (BattleEye, Easy Anti-Cheat, Vanguard, VAC) flags global
@@ -27,7 +29,7 @@ never pause (the setting is remembered).
 
 ## Get it
 
-[Download MechSounds v11](https://muse.ai/files/1323371437529100/28997840379912453/a4j5ehhsphklxo631ecn0uwt/MechSounds-v11.zip) — ready-to-run zip (exe + sounds).
+[Download MechSounds v12](https://muse.ai/files/1323371437529100/4557091301212628/msw9qwqpzn9hfwt6ix2fo2d8/MechSounds-v12.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 
@@ -52,10 +54,7 @@ type — **Linear** (Rainy 75 Pro, NK Cream, Everglide Oreo, Leobog
 Reaper, Keychron Q3, Ikki68 Aurora, Aula F75, Custom keyboard,
 Epomaker TH85), **Tactile** (Crystal Panda), **Topre** (HHKB Topre),
 **Clicky** (IBM Model M, HyperX Alloy), **Hall Effect** (Gravastar
-V60 Pro, Wooting 60HE) — click one to hear it. Under the list, a
-**"View \<profile\> on MechVibes"** link opens that sound's pack
-page on Mechvibes in your browser, so you can hear the original
-recording and read about the board it came from. Or pick **Custom
+V60 Pro, Wooting 60HE) — click one to hear it. Or pick **Custom
 build** and tune your own: switch type (linear / tactile / clicky),
 lubed or not, case material (plastic / aluminum / brass), and mods
 (tape mod, o-rings, both, neither). The custom build starts from a
@@ -156,6 +155,11 @@ This is built so the sound never lags behind your fingers:
 - **Games:** it pauses itself automatically when a game is in
   front (see [Game-safe](#game-safe)) — no need to toggle it off
   by hand.
+- The sounds are real recordings, not synthesized: the first
+  version synthesized its switch sounds, and the loudest one had
+  44% of its attack energy in a single 480 Hz tone — which is why
+  it sounded like a Windows error ding. Real recordings don't have
+  that problem, and they're full-spectrum instead of thin.
 
 ## Files
 
