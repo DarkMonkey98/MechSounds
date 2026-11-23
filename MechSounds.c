@@ -53,8 +53,8 @@
  *    10-30 ms — total stays well under the ~50 ms where typing
  *    starts to feel disconnected from its sound.
  *
- * Controls: Ctrl+Alt+M toggle, Ctrl+Alt+P cycle profile,
- *           Ctrl+Alt+Q quit. Right-click the tray icon for a menu.
+ * Controls: right-click the tray icon for a menu (profiles,
+ *           toggle, chooser, start-with-Windows, exit).
  *
  * Build (Linux cross-compile with Zig):
  *   zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows \
@@ -70,7 +70,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v12"
+#define MECHSOUNDS_VERSION "v13"
 
 #define WM_TRAYICON  (WM_USER + 1)
 #define WM_PLAY_DOWN (WM_USER + 2)
@@ -94,10 +94,6 @@
 #define ID_CH_LUBE    2031
 #define ID_CH_CASE    2032
 #define ID_CH_MODS    2033
-
-#define HOTKEY_TOGGLE  1
-#define HOTKEY_PROFILE 2
-#define HOTKEY_QUIT    3
 
 /* sounds: 6 down variants + space, loaded as PCM in memory.
    One sound per keypress: no release (up) sounds — a key plays its
@@ -999,10 +995,6 @@ static void start_engine(void) {
              MECHSOUNDS_VERSION, current_profile_name());
     Shell_NotifyIconA(NIM_ADD, &nid);
 
-    RegisterHotKey(hwnd, HOTKEY_TOGGLE, MOD_CONTROL | MOD_ALT, 'M');
-    RegisterHotKey(hwnd, HOTKEY_PROFILE, MOD_CONTROL | MOD_ALT, 'P');
-    RegisterHotKey(hwnd, HOTKEY_QUIT, MOD_CONTROL | MOD_ALT, 'Q');
-
     running = TRUE;
     SetTimer(hwnd, IDT_GAMECHECK, 1000, NULL);
     log_msg("start_engine: hook installed, tray icon added, running");
@@ -1373,21 +1365,6 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_TIMER:
         if (wp == IDT_GAMECHECK)
             game_check();
-        return 0;
-    case WM_HOTKEY:
-        if (wp == HOTKEY_TOGGLE) {
-            enabled = !enabled;
-            update_tip();
-            show_balloon(enabled ? "MechSounds ON" : "MechSounds OFF");
-        } else if (wp == HOTKEY_PROFILE) {
-            curProfile = (curProfile + 1) % NCHOICES;
-            load_profile_sounds();
-            update_tip();
-            show_balloon(current_profile_name());
-            save_settings();
-        } else if (wp == HOTKEY_QUIT) {
-            PostMessage(h, WM_CLOSE, 0, 0);
-        }
         return 0;
     case WM_TRAYICON:
         if (lp == WM_RBUTTONUP)

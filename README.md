@@ -29,7 +29,7 @@ never pause (the setting is remembered).
 
 ## Get it
 
-[Download MechSounds v12](https://muse.ai/files/1323371437529100/4557091301212628/msw9qwqpzn9hfwt6ix2fo2d8/MechSounds-v12.zip) — ready-to-run zip (exe + sounds).
+[Download MechSounds v13](https://muse.ai/files/1323371437529100/1692669465599876/7s9ie0qbtoi9uw7t7i9prx0c/MechSounds-v13.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 
@@ -70,23 +70,20 @@ Your pick and volume are remembered for next time.
   your last saved switch and volume.
 - **Change switches later:** double-click the tray icon to reopen
   the chooser, or right-click it and pick a switch from the menu.
-  `Ctrl+Alt+P` cycles through them too.
 
 ## Controls
 
-| Hotkey | What it does |
+Everything is on the tray icon — no keyboard shortcuts.
+
+| Tray action | What it does |
 |---|---|
-| `Ctrl+Alt+M` | Toggle sounds on/off |
-| `Ctrl+Alt+P` | Cycle switch profile (shows the name on screen) |
-| `Ctrl+Alt+Q` | Quit |
-| Tray icon right-click | Profiles, toggle, chooser, start-with-Windows, exit |
-| Tray icon double-click | Reopen the chooser |
+| Right-click | Profiles, toggle, chooser, start-with-Windows, exit |
+| Double-click | Reopen the chooser |
 
 ## Switch profiles
 
 All fifteen are **real recordings** from [Mechvibes](https://mechvibes.com/sound-packs).
 It starts on **Rainy 75 Pro** (the fullest sound).
-`Ctrl+Alt+P` cycles through:
 
 | Profile | Character | MechVibes page |
 |---|---|---|
@@ -155,11 +152,6 @@ This is built so the sound never lags behind your fingers:
 - **Games:** it pauses itself automatically when a game is in
   front (see [Game-safe](#game-safe)) — no need to toggle it off
   by hand.
-- The sounds are real recordings, not synthesized: the first
-  version synthesized its switch sounds, and the loudest one had
-  44% of its attack energy in a single 480 Hz tone — which is why
-  it sounded like a Windows error ding. Real recordings don't have
-  that problem, and they're full-spectrum instead of thin.
 
 ## Files
 
