@@ -9,8 +9,6 @@ sounds through a MacBook trackpad). Same idea, different trick: instead
 of trackpad haptics, MechSounds listens to your key presses system-wide and plays a recording of
 a real mechanical switch to your normal audio output.
 
-![MechSounds chooser - pick a switch, or build your own](screenshot.png)
-
 ## Game-safe
 
 Anticheat (BattleEye, Easy Anti-Cheat, Vanguard, VAC) flags global
