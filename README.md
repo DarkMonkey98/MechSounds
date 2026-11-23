@@ -29,7 +29,7 @@ never pause (the setting is remembered).
 
 ## Get it
 
-[Download MechSounds v16](https://muse.ai/files/1323371437529100/2086694475381504/gxzr3qy1vuuy1sm30ghkvpoi/MechSounds-v16.zip) — ready-to-run zip (exe + sounds).
+[Download MechSounds v17](https://muse.ai/files/1323371437529100/29232673083066249/daoizaa8n84xplehdpe03lfj/MechSounds-v17.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 
@@ -71,7 +71,7 @@ Your pick and volume are remembered for next time.
   right-click the tray icon → "Start with Windows"). When it starts
   with Windows it skips the chooser and just starts playing with
   your last saved switch and volume.
-- **Change switches later:** double-click the tray icon to reopen
+- **Change switches later:** click the tray icon to reopen
   the chooser, or right-click it and pick a switch from the menu.
 - **Exit really exits:** right-click the tray icon → **Exit** ends
   the process completely, so the folder can be deleted right after
@@ -83,8 +83,8 @@ Everything is on the tray icon — no keyboard shortcuts.
 
 | Tray action | What it does |
 |---|---|
-| Right-click | Profiles, toggle, chooser, start-with-Windows, exit |
-| Double-click | Reopen the chooser |
+| Right-click | Switch profile (submenu — scrolls), toggle, chooser, start-with-Windows, exit |
+| Left-click | Reopen the chooser |
 
 ## Switch profiles
 

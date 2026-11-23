@@ -71,7 +71,7 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v16"
+#define MECHSOUNDS_VERSION "v17"
 
 /* Custom icon, embedded via mechsounds.rc (zig rc -> mechsounds.res).
    Resource 1 is the orange keycap icon; the exe file, the tray
@@ -1219,12 +1219,17 @@ static void show_balloon(const char *text) {
 
 static void show_menu(void) {
     HMENU menu = CreatePopupMenu();
+    HMENU sub = CreatePopupMenu();
     POINT pt;
+    /* Profiles live in a submenu so they scroll on their own; the
+       bottom options (toggle, chooser, startup, exit) stay in the
+       main menu and are always visible, never scrolled away. */
     for (int i = 0; i < rtNProfiles; i++)
-        AppendMenuA(menu, MF_STRING | (i == curProfile ? MF_CHECKED : MF_UNCHECKED),
+        AppendMenuA(sub, MF_STRING | (i == curProfile ? MF_CHECKED : MF_UNCHECKED),
                     ID_TRAY_PROFILE_BASE + i, RTNames[i]);
-    AppendMenuA(menu, MF_STRING | (curProfile == customIndex ? MF_CHECKED : MF_UNCHECKED),
+    AppendMenuA(sub, MF_STRING | (curProfile == customIndex ? MF_CHECKED : MF_UNCHECKED),
                 ID_TRAY_PROFILE_BASE + customIndex, "Custom build...");
+    AppendMenuA(menu, MF_STRING | MF_POPUP, (UINT_PTR)sub, "Switch profile");
     AppendMenuA(menu, MF_SEPARATOR, 0, NULL);
     AppendMenuA(menu, MF_STRING | (enabled ? MF_CHECKED : MF_UNCHECKED),
                 ID_TRAY_TOGGLE, enabled ? "Sounds: On" : "Sounds: Off");
@@ -1318,8 +1323,15 @@ static void show_tab(int tab) {
         for (int k = 0; k < RTCatCounts[c]; k++) {
             int i = start + k;  /* index into RTChooserOrder */
             HWND r = GetDlgItem(hwndChooser, ID_CH_RADIO_BASE + i);
-            if (r)
+            if (r) {
                 ShowWindow(r, c == tab ? SW_SHOW : SW_HIDE);
+                /* Hiding the checked auto-radio (e.g. Rainy75 on
+                   Linear) disables the other radios in the single
+                   group when they are shown again — the Topre tab
+                   came up greyed out. Re-enable on show. */
+                if (c == tab)
+                    EnableWindow(r, TRUE);
+            }
         }
         start += RTCatCounts[c];
     }
@@ -1607,7 +1619,7 @@ static void create_chooser(void) {
                         WS_CHILD | WS_VISIBLE, 16, 450, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    c = CreateWindowExA(0, "STATIC", "from the tray icon. Double-click the tray icon to pick again.",
+    c = CreateWindowExA(0, "STATIC", "from the tray icon. Click the tray icon to pick again.",
                         WS_CHILD | WS_VISIBLE, 16, 468, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
@@ -1671,7 +1683,7 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_TRAYICON:
         if (lp == WM_RBUTTONUP)
             show_menu();
-        else if (lp == WM_LBUTTONDBLCLK)
+        else if (lp == WM_LBUTTONUP || lp == WM_LBUTTONDBLCLK)
             create_chooser();
         return 0;
     case WM_COMMAND:
