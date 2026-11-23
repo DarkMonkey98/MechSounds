@@ -1,4 +1,4 @@
-# MechSounds — thocky keyboard sounds for Windows
+# MechSounds — Thocky keyboard sounds for Windows
 
 Your keyboard is thocky. Your noise-canceling headphones don't know that.
 MechSounds plays a mechanical switch sound through your headphones on
