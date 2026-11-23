@@ -58,17 +58,12 @@
  *
  * Build (Linux cross-compile with Zig):
  *   zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows \
- *     -o MechSounds.exe MechSounds.c -lwinmm -lgdi32 -lshell32 -lcomctl32 \
- *       -lwininet -lmfplat -lmfreadwrite -lmfuuid -lole32
+ *     -o MechSounds.exe MechSounds.c -lwinmm -lgdi32 -lshell32 -lcomctl32
  * ============================================================ */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <commctrl.h>
 #include <mmsystem.h>
-#include <wininet.h>
-#include <mfapi.h>
-#include <mfidl.h>
-#include <mfreadwrite.h>
 #include <shellapi.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,7 +71,12 @@
 #include <stdarg.h>
 #include <math.h>
 
-#define MECHSOUNDS_VERSION "v15"
+#define MECHSOUNDS_VERSION "v16"
+
+/* Custom icon, embedded via mechsounds.rc (zig rc -> mechsounds.res).
+   Resource 1 is the orange keycap icon; the exe file, the tray
+   icon and the chooser all use it. */
+#define IDI_APP 1
 
 #define WM_TRAYICON  (WM_USER + 1)
 #define WM_PLAY_DOWN (WM_USER + 2)
@@ -96,10 +96,6 @@
 #define ID_CH_TEST    2006
 #define ID_CH_GAMEPAUSE 2008
 #define ID_CH_TAB     2009
-#define ID_CH_SEARCH  2011
-#define ID_CH_SEARCH_BTN 2012
-#define ID_CH_RESULTS 2013
-#define ID_CH_SEARCH_STATUS 2014
 #define IDT_GAMECHECK  1
 #define ID_CH_SW      2030
 #define ID_CH_LUBE    2031
@@ -107,29 +103,34 @@
 #define ID_CH_MODS    2033
 
 /* sounds: 6 down variants + space, loaded as PCM in memory.
-   One sound per keypress: no release (up) sounds — a key plays its
-   down sound once on press and nothing on release. Each key is
-   assigned ONE variant by hash, so the same key always plays the
-   same recording and different keys sound like themselves. */
+   Per-key sounds: one recording per physical key, from the pack's
+   own key_<Code>.wav files (see VK_KEY_CODES below). Each key
+   plays its own recording when the pack has one; otherwise it
+   falls back to a down variant by hash, so the same key always
+   plays the same recording and different keys sound like themselves. */
 #define NDOWN_VARIANTS 6
 #define NSOUNDS        7   /* down1-6 + space1 */
+#define MAX_KEY_SOUNDS 80
 /* MCI aliases: one device per (sound, slot) so sounds blend.
-   Down: 6 variants x 2 aliases. Big keys: 4 keys x 2 aliases. */
+   Down: 6 variants x 2 aliases. Big keys: 4 keys x 2 aliases.
+   Per-key: 1 alias each (a key retriggers its own recording). */
 #define NDOWN_ALIASES  2
 #define NBIG_ALIASES   2
-#define NALIASES       (NDOWN_VARIANTS * NDOWN_ALIASES + 4 * NBIG_ALIASES)
+#define NKEY_ALIASES   1
+#define NALIASES       (NDOWN_VARIANTS * NDOWN_ALIASES + 4 * NBIG_ALIASES + \
+                        MAX_KEY_SOUNDS * NKEY_ALIASES)
 
 #define KIND_DOWN  0
 #define KIND_SPACE 1
+#define KIND_KEY   2
 
 /* Custom build: profile index == rtNProfiles (after all presets). */
-#define NPROFILES_BUILTIN 15
+#define NPROFILES_BUILTIN 44
 #define MAX_PROFILES 64
-/* Runtime profile table: 15 built-ins + packs added by search-and-add.
+/* Runtime profile table: the built-in profiles.
    Folder = sounds subfolder, Name = chooser display name,
    Cat = switch-type tab (0 Linear, 1 Tactile, 2 Topre, 3 Clicky,
-   4 Hall Effect). Built at startup from the tables below plus the
-   registry list under Software\MechSounds\AddedProfiles. */
+   4 Hall Effect). Built at startup from the tables below. */
 static char RTFolders[MAX_PROFILES][64];
 static char RTNames[MAX_PROFILES][128];
 static int RTCat[MAX_PROFILES];
@@ -141,7 +142,14 @@ static void init_runtime_profiles(void);  /* defined in the chooser section */
 static const char *Profiles[] = {
     "Rainy75", "NKCream", "CrystalPanda", "Oreo", "RealTopre", "ModelM", "Reaper",
     "KeychronQ3", "OrangeDeluxe", "AulaF75", "CreamyThingy", "GravastarV60",
-    "HyperXAlloy", "Wooting60HE", "EpomakerTH85"
+    "HyperXAlloy", "Wooting60HE", "EpomakerTH85",
+    "ZoomTKL", "HolyPanda", "C3HolyPanda", "MachenikeK500", "KeychronK4",
+    "SK61Brown", "EGCrystalPurple", "AkkoLavender", "CherryMXBrown", "LogitechProX",
+    "ToprePurple", "SilentTopres", "KoreanTopre",
+    "ClickyPerfect", "RE2Typewriter", "LogitechMXMini", "HyperXOrigins",
+    "BlitzWolfKB1", "PoseidonZ", "Neo80Melodic", "KailhBoxWhite",
+    "WootingTikken", "ApexPro2023", "ApexProKauankkj", "WootingSaint",
+    "IQUNIXEV63", "ApexProTKL", "ApexProOmni", "ApexProV2"
 };
 static const char *ProfileNames[] = {
     "Rainy 75 Pro - Kailh Cocoa",
@@ -158,9 +166,38 @@ static const char *ProfileNames[] = {
     "Gravastar V60 Pro - Hall Effect",
     "HyperX Alloy - Cherry MX Blue",
     "Wooting 60HE - Lekker L60 Hall Effect",
-    "Epomaker TH85 - Creamy Jade"
+    "Epomaker TH85 - Creamy Jade",
+    "Zoom TKL Morandi (lubed)",
+    "Holy Panda Q66",
+    "C3 Holy Panda",
+    "Machenike K500",
+    "Keychron K4 Glorious Panda",
+    "SK61 Brown",
+    "EG Crystal Purple",
+    "Akko Lavender Purple",
+    "Cherry MX Brown PBT",
+    "Logitech Pro X Brown",
+    "Topre Purple Hybrid",
+    "Silent Topres",
+    "Korean Topre Clone",
+    "Clicky Perfect",
+    "RE2 Typewriter",
+    "Logitech MX Mini",
+    "HyperX Alloy Origins",
+    "BlitzWolf KB1 Blue",
+    "Poseidon Z Kailh Blue",
+    "Neo80 Gateron Melodic",
+    "Kailh Box White (GMK67)",
+    "Wooting 60HE Lekker Tikken",
+    "Apex Pro TKL 2023",
+    "Apex Pro TKL (kauankkj)",
+    "Wooting 60HE (Saint)",
+    "IQUNIX EV63",
+    "Apex Pro TKL",
+    "Apex Pro OmniPoint",
+    "Apex Pro V2"
 };
-#define NPROFILES 15
+#define NPROFILES 44
 
 static const int VolumeLevels[] = { 100, 80, 60, 40, 20 };
 #define NVOLUMES 5
@@ -203,7 +240,50 @@ static char bigPath[4][MAX_PATH];
 static int downDurMs[NDOWN_VARIANTS];
 static int bigDurMs[4];
 static char tempDir[MAX_PATH];
-/* MCI alias pool. kind 0 = down variant, 1 = big key. */
+/* Per-key sounds: one recording per physical key. The pack's
+   key_<Code>.wav files, keyed by Windows virtual-key code. */
+typedef struct {
+    DWORD vk;
+    char code[16];
+    char path[MAX_PATH];
+    int durMs;
+} KeySound;
+static KeySound keySounds[MAX_KEY_SOUNDS];
+static short *keyPCM[MAX_KEY_SOUNDS];
+static int keyFrames[MAX_KEY_SOUNDS];
+static int nKeySounds = 0;
+/* Windows virtual-key code -> W3C key code used in MechVibes
+   config.json definitions (and in key_<Code>.wav filenames). */
+static const struct { DWORD vk; const char *code; } VK_KEY_CODES[] = {
+    { 'A', "KeyA" }, { 'B', "KeyB" }, { 'C', "KeyC" }, { 'D', "KeyD" },
+    { 'E', "KeyE" }, { 'F', "KeyF" }, { 'G', "KeyG" }, { 'H', "KeyH" },
+    { 'I', "KeyI" }, { 'J', "KeyJ" }, { 'K', "KeyK" }, { 'L', "KeyL" },
+    { 'M', "KeyM" }, { 'N', "KeyN" }, { 'O', "KeyO" }, { 'P', "KeyP" },
+    { 'Q', "KeyQ" }, { 'R', "KeyR" }, { 'S', "KeyS" }, { 'T', "KeyT" },
+    { 'U', "KeyU" }, { 'V', "KeyV" }, { 'W', "KeyW" }, { 'X', "KeyX" },
+    { 'Y', "KeyY" }, { 'Z', "KeyZ" },
+    { '0', "Digit0" }, { '1', "Digit1" }, { '2', "Digit2" },
+    { '3', "Digit3" }, { '4', "Digit4" }, { '5', "Digit5" },
+    { '6', "Digit6" }, { '7', "Digit7" }, { '8', "Digit8" },
+    { '9', "Digit9" },
+    { VK_SPACE, "Space" }, { VK_RETURN, "Enter" },
+    { VK_BACK, "Backspace" }, { VK_TAB, "Tab" },
+    { VK_ESCAPE, "Escape" },
+    { VK_OEM_1, "Semicolon" }, { VK_OEM_PLUS, "Equal" },
+    { VK_OEM_COMMA, "Comma" }, { VK_OEM_MINUS, "Minus" },
+    { VK_OEM_PERIOD, "Period" }, { VK_OEM_2, "Slash" },
+    { VK_OEM_3, "Backquote" }, { VK_OEM_4, "BracketLeft" },
+    { VK_OEM_5, "Backslash" }, { VK_OEM_6, "BracketRight" },
+    { VK_OEM_7, "Quote" },
+    { VK_F1, "F1" }, { VK_F2, "F2" }, { VK_F3, "F3" }, { VK_F4, "F4" },
+    { VK_F5, "F5" }, { VK_F6, "F6" }, { VK_F7, "F7" }, { VK_F8, "F8" },
+    { VK_F9, "F9" }, { VK_F10, "F10" }, { VK_F11, "F11" }, { VK_F12, "F12" },
+    { VK_LEFT, "ArrowLeft" }, { VK_UP, "ArrowUp" },
+    { VK_RIGHT, "ArrowRight" }, { VK_DOWN, "ArrowDown" },
+    { VK_CAPITAL, "CapsLock" },
+};
+#define N_VK_KEY_CODES (sizeof(VK_KEY_CODES) / sizeof(VK_KEY_CODES[0]))
+/* MCI alias pool. kind 0 = down variant, 1 = big key, 2 = per-key. */
 typedef struct {
     char name[16];
     int kind;
@@ -452,6 +532,22 @@ static BOOL open_aliases(void) {
             aliasCount++;
         }
     }
+    /* Per-key sounds: one alias each, kind 2, index = keySounds slot. */
+    for (v = 0; v < nKeySounds; v++) {
+        Alias *al = &aliases[aliasCount];
+        snprintf(al->name, sizeof(al->name), "msk%d", aliasCount);
+        al->kind = 2;
+        al->index = v;
+        al->freeAt = 0;
+        snprintf(cmd, sizeof(cmd), "open \"%s\" type waveaudio alias %s",
+                 keySounds[v].path, al->name);
+        if (mciSendStringA(cmd, NULL, 0, NULL) != 0)
+            continue;
+        snprintf(cmd, sizeof(cmd), "set %s audio volume to %d",
+                 al->name, volume * 10);
+        mci_cmd(cmd);
+        aliasCount++;
+    }
     audioReady = aliasCount > 0;
     log_msg("open_aliases: %d/%d aliases opened, audioReady=%d",
             aliasCount, NALIASES, audioReady);
@@ -696,6 +792,14 @@ static void free_profile_sounds(void) {
         bigKeyPCM[i] = NULL;
         bigKeyFrames[i] = 0;
     }
+    for (i = 0; i < nKeySounds; i++) {
+        free(keyPCM[i]);
+        keyPCM[i] = NULL;
+        keyFrames[i] = 0;
+        keySounds[i].path[0] = '\0';
+        keySounds[i].durMs = 0;
+    }
+    nKeySounds = 0;
 }
 
 static void load_profile_sounds(void) {
@@ -762,6 +866,42 @@ static void load_profile_sounds(void) {
             write_wav_file(bigPath[v], soundPCM[NDOWN_VARIANTS],
                            soundFrames[NDOWN_VARIANTS]);
     }
+    /* Per-key sounds: every key plays its own recording from the
+       pack when one exists (key_<Code>.wav). Keys the pack never
+       recorded fall back to a down variant by hash at play time. */
+    nKeySounds = 0;
+    for (v = 0; v < (int)N_VK_KEY_CODES && nKeySounds < MAX_KEY_SOUNDS; v++) {
+        char kpath[MAX_PATH];
+        short *pcm = NULL;
+        int frames;
+        snprintf(kpath, sizeof(kpath), "%s\\sounds\\%s\\key_%s.wav",
+                 exeDir, folder, VK_KEY_CODES[v].code);
+        frames = load_wav_pcm(kpath, &pcm);
+        if (!pcm || frames <= 0) {
+            free(pcm);
+            continue;
+        }
+        if (custom)
+            pcm = dsp_sound(pcm, frames);
+        keyPCM[nKeySounds] = pcm;
+        keyFrames[nKeySounds] = frames;
+        keySounds[nKeySounds].vk = VK_KEY_CODES[v].vk;
+        snprintf(keySounds[nKeySounds].code, sizeof(keySounds[nKeySounds].code),
+                 "%s", VK_KEY_CODES[v].code);
+        keySounds[nKeySounds].durMs = frames > 0 ? frames * 1000 / 44100 : 0;
+        if (custom) {
+            snprintf(keySounds[nKeySounds].path,
+                     sizeof(keySounds[nKeySounds].path),
+                     "%s\\key_%s.wav", tempDir, VK_KEY_CODES[v].code);
+            write_wav_file(keySounds[nKeySounds].path, pcm, frames);
+        } else {
+            snprintf(keySounds[nKeySounds].path,
+                     sizeof(keySounds[nKeySounds].path), "%s", kpath);
+        }
+        nKeySounds++;
+    }
+    log_msg("load_profile_sounds: %s, %d per-key sounds",
+            folder, nKeySounds);
     open_aliases();
     if (!audioReady) {
         MessageBoxA(NULL,
@@ -779,12 +919,32 @@ static int key_variant(DWORD vk) {
     return (int)(((vk * 2654435761u) >> 29) % NDOWN_VARIANTS);
 }
 
+/* Index of this key's own recording in keySounds, or -1. */
+static int key_sound_index(DWORD vk) {
+    int i;
+    for (i = 0; i < nKeySounds; i++)
+        if (keySounds[i].vk == vk)
+            return i;
+    return -1;
+}
+
 static void play_kind(int kind, DWORD vk) {
     int i, wantKind, wantIndex, durMs;
     ULONGLONG now;
     char cmd[64];
     if (!audioReady)
         return;
+    /* A key with its own recording plays that recording. This is
+       what makes every key sound slightly different. */
+    {
+        int ksi = key_sound_index(vk);
+        if (ksi >= 0) {
+            wantKind = KIND_KEY;
+            wantIndex = ksi;
+            durMs = keySounds[ksi].durMs;
+            goto play;
+        }
+    }
     if (kind == KIND_SPACE) {
         /* Bigger keys: each plays its own pitch-shifted space
            sound, so space, enter, backspace and tab are distinct —
@@ -797,6 +957,7 @@ static void play_kind(int kind, DWORD vk) {
         wantIndex = key_variant(vk);
         durMs = downDurMs[wantIndex];
     }
+play:
     /* One `play <alias> from 0` on a free alias for this sound.
        An alias is reusable once its sound has played out, so
        sounds overlap and play fully instead of cutting off. */
@@ -1013,7 +1174,11 @@ static void start_engine(void) {
     nid.uID = 1;
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+    /* Custom keycap icon from the embedded resource; fall back to
+       the system icon if the resource is missing for any reason. */
+    nid.hIcon = LoadIcon(hInst, MAKEINTRESOURCE(IDI_APP));
+    if (!nid.hIcon)
+        nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     snprintf(nid.szTip, sizeof(nid.szTip), "MechSounds %s - %s",
              MECHSOUNDS_VERSION, current_profile_name());
     Shell_NotifyIconA(NIM_ADD, &nid);
@@ -1076,619 +1241,6 @@ static void show_menu(void) {
 }
 
 
-/* ---------------- search-and-add (MechVibes) ---------------------- */
-/* Type a keyboard name, search MechVibes' public API, pick a pack,
-   and it downloads, converts and installs itself as a new profile.
-   If several packs match one keyboard (different switches), they all
-   show up and you pick the switch you have. */
-
-#define MV_API "https://mechvibes.com/api/sound-packs"
-#define MV_MAX_RESULTS 20
-
-typedef struct {
-    char id[64];
-    char name[128];
-    char keyboard[128];
-    char switchName[128];
-    char switchType[32];
-    char license[32];
-} MVPack;
-
-static MVPack mvResults[MV_MAX_RESULTS];
-static int mvResultCount = 0;
-
-/* Minimal JSON string-field extractor: finds "key":"value". */
-static BOOL mv_json_str(const char *json, const char *key, char *out, int outSz) {
-    char pat[64];
-    const char *p, *e;
-    snprintf(pat, sizeof(pat), "\"%s\":\"", key);
-    p = strstr(json, pat);
-    if (!p)
-        return FALSE;
-    p += strlen(pat);
-    e = p;
-    while (*e && *e != '"') {
-        if (*e == '\\' && e[1])
-            e += 2;
-        else
-            e++;
-    }
-    if ((int)(e - p) >= outSz)
-        return FALSE;
-    memcpy(out, p, (size_t)(e - p));
-    out[e - p] = '\0';
-    return TRUE;
-}
-
-/* HTTPS GET via WinINet. Returns a malloc'd NUL-terminated buffer. */
-static char *mv_http_get(const char *url, DWORD *outLen) {
-    HINTERNET hNet = NULL, hReq = NULL;
-    char *buf = NULL;
-    DWORD cap = 65536, len = 0, got = 0;
-    char host[256], path[512];
-    const char *p;
-    BOOL ok = FALSE;
-    if (!url || strncmp(url, "https://", 8) != 0)
-        return NULL;
-    p = url + 8;
-    {
-        const char *slash = strchr(p, '/');
-        size_t hlen = slash ? (size_t)(slash - p) : strlen(p);
-        if (hlen >= sizeof(host))
-            return NULL;
-        memcpy(host, p, hlen);
-        host[hlen] = '\0';
-        snprintf(path, sizeof(path), "%s", slash ? slash : "/");
-    }
-    hNet = InternetOpenA("MechSounds", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-    if (!hNet)
-        return NULL;
-    hReq = InternetOpenUrlA(hNet, url, NULL, 0,
-                            INTERNET_FLAG_SECURE | INTERNET_FLAG_RELOAD |
-                            INTERNET_FLAG_NO_CACHE_WRITE, 0);
-    if (!hReq) {
-        InternetCloseHandle(hNet);
-        return NULL;
-    }
-    buf = (char *)malloc(cap);
-    if (!buf) {
-        InternetCloseHandle(hReq);
-        InternetCloseHandle(hNet);
-        return NULL;
-    }
-    while (InternetReadFile(hReq, buf + len, cap - len - 1, &got) && got > 0) {
-        len += got;
-        if (len + 4096 >= cap) {
-            char *nb;
-            cap *= 2;
-            nb = (char *)realloc(buf, cap);
-            if (!nb)
-                break;
-            buf = nb;
-        }
-    }
-    ok = (len > 0);
-    InternetCloseHandle(hReq);
-    InternetCloseHandle(hNet);
-    if (!ok) {
-        free(buf);
-        return NULL;
-    }
-    buf[len] = '\0';
-    if (outLen)
-        *outLen = len;
-    return buf;
-}
-
-/* URL-encode a query string (spaces -> %20, etc.). */
-static void mv_url_encode(const char *in, char *out, int outSz) {
-    static const char *hex = "0123456789ABCDEF";
-    int o = 0;
-    for (; *in && o < outSz - 4; in++) {
-        unsigned char c = (unsigned char)*in;
-        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~') {
-            out[o++] = (char)c;
-        } else {
-            out[o++] = '%';
-            out[o++] = hex[c >> 4];
-            out[o++] = hex[c & 15];
-        }
-    }
-    out[o] = '\0';
-}
-
-/* Search MechVibes for keyboard packs matching the query.
-   Fills mvResults / mvResultCount. Returns the count. */
-static int mv_search(const char *query) {
-    char q[256], url[768], *body;
-    const char *p;
-    int n = 0;
-    mvResultCount = 0;
-    mv_url_encode(query, q, sizeof(q));
-    snprintf(url, sizeof(url), "%s?q=%s&type=keyboard&limit=%d", MV_API, q, MV_MAX_RESULTS);
-    body = mv_http_get(url, NULL);
-    if (!body)
-        return -1;
-    /* Walk the "packs" array: each {...} object is one pack. */
-    p = strstr(body, "\"packs\":[");
-    if (!p) {
-        free(body);
-        return 0;
-    }
-    p += 9;
-    while (n < MV_MAX_RESULTS) {
-        const char *obj = strchr(p, '{');
-        const char *end;
-        int depth = 0;
-        const char *s;
-        char tmp[512];
-        if (!obj)
-            break;
-        /* Find the matching close brace. */
-        end = obj;
-        depth = 0;
-        for (s = obj; *s; s++) {
-            if (*s == '{')
-                depth++;
-            else if (*s == '}') {
-                depth--;
-                if (depth == 0) {
-                    end = s;
-                    break;
-                }
-            }
-        }
-        if (depth != 0 || end <= obj)
-            break;
-        if ((size_t)(end - obj + 1) >= sizeof(tmp))
-            break;
-        memcpy(tmp, obj, (size_t)(end - obj + 1));
-        tmp[end - obj + 1] = '\0';
-        {
-            MVPack *pk = &mvResults[n];
-            memset(pk, 0, sizeof(*pk));
-            mv_json_str(tmp, "id", pk->id, sizeof(pk->id));
-            mv_json_str(tmp, "name", pk->name, sizeof(pk->name));
-            mv_json_str(tmp, "keyboard", pk->keyboard, sizeof(pk->keyboard));
-            mv_json_str(tmp, "switchName", pk->switchName, sizeof(pk->switchName));
-            mv_json_str(tmp, "switchType", pk->switchType, sizeof(pk->switchType));
-            mv_json_str(tmp, "license", pk->license, sizeof(pk->license));
-            if (pk->id[0])
-                n++;
-        }
-        p = end + 1;
-        if (*p == ',')
-            p++;
-        if (*p == ']')
-            break;
-    }
-    free(body);
-    mvResultCount = n;
-    return n;
-}
-
-/* Download a pack zip to the temp dir. Returns TRUE on success. */
-static BOOL mv_download_pack(const char *id, char *zipPath, int zipSz) {
-    char url[512], tmp[MAX_PATH];
-    HINTERNET hNet = NULL, hReq = NULL;
-    FILE *f = NULL;
-    char host[256], path[512];
-    const char *p;
-    DWORD status = 0, sz = sizeof(status), got = 0;
-    char chunk[8192];
-    BOOL ok = FALSE;
-    snprintf(url, sizeof(url), "%s/%s/download", MV_API, id);
-    snprintf(tmp, sizeof(tmp), "%s\\pack.zip", tempDir);
-    snprintf(zipPath, (size_t)zipSz, "%s", tmp);
-    hNet = InternetOpenA("MechSounds", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-    if (!hNet)
-        return FALSE;
-    /* Follow the 302 redirect to the file host. */
-    hReq = InternetOpenUrlA(hNet, url, NULL, 0,
-                            INTERNET_FLAG_SECURE | INTERNET_FLAG_RELOAD |
-                            INTERNET_FLAG_NO_CACHE_WRITE, 0);
-    if (!hReq) {
-        InternetCloseHandle(hNet);
-        return FALSE;
-    }
-    HttpQueryInfoA(hReq, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER,
-                   &status, &sz, NULL);
-    if (status != 200) {
-        InternetCloseHandle(hReq);
-        InternetCloseHandle(hNet);
-        return FALSE;
-    }
-    f = fopen(tmp, "wb");
-    if (!f) {
-        InternetCloseHandle(hReq);
-        InternetCloseHandle(hNet);
-        return FALSE;
-    }
-    while (InternetReadFile(hReq, chunk, sizeof(chunk), &got) && got > 0)
-        fwrite(chunk, 1, got, f);
-    fclose(f);
-    InternetCloseHandle(hReq);
-    InternetCloseHandle(hNet);
-    ok = GetFileAttributesA(tmp) != INVALID_FILE_ATTRIBUTES;
-    return ok;
-}
-
-/* Run PowerShell Expand-Archive to unzip a pack. */
-static BOOL mv_unzip(const char *zip, const char *dest) {
-    char cmd[1024];
-    STARTUPINFOA si = { sizeof(si) };
-    PROCESS_INFORMATION pi;
-    DWORD rc = 0;
-    CreateDirectoryA(dest, NULL);
-    snprintf(cmd, sizeof(cmd),
-             "powershell -NoProfile -Command \"Expand-Archive -LiteralPath '%s' -DestinationPath '%s' -Force\"",
-             zip, dest);
-    if (!CreateProcessA(NULL, cmd, NULL, NULL, FALSE,
-                        CREATE_NO_WINDOW, NULL, NULL, &si, &pi))
-        return FALSE;
-    WaitForSingleObject(pi.hProcess, 30000);
-    GetExitCodeProcess(pi.hProcess, &rc);
-    CloseHandle(pi.hProcess);
-    CloseHandle(pi.hThread);
-    return rc == 0;
-}
-
-/* Decode any audio file (WAV/MP3/OGG/FLAC) to 44.1 kHz mono 16-bit PCM
-   via Media Foundation. Returns frame count, *out is malloc'd. */
-static int mv_decode_audio(const char *path, short **out) {
-    IMFSourceReader *reader = NULL;
-    IMFMediaType *type = NULL;
-    HRESULT hr;
-    short *pcm = NULL;
-    size_t cap = 0, len = 0;
-    int frames = 0;
-    *out = NULL;
-    hr = MFStartup(MF_VERSION, MFSTARTUP_FULL);
-    if (FAILED(hr))
-        return 0;
-    hr = MFCreateSourceReaderFromURL((const WCHAR *)NULL, NULL, &reader);
-    (void)hr;
-    /* Use the ANSI path via a wide-string conversion. */
-    {
-        WCHAR wpath[MAX_PATH];
-        MultiByteToWideChar(CP_ACP, 0, path, -1, wpath, MAX_PATH);
-        if (reader)
-            reader->lpVtbl->Release(reader);
-        reader = NULL;
-        hr = MFCreateSourceReaderFromURL(wpath, NULL, &reader);
-    }
-    if (FAILED(hr) || !reader) {
-        MFShutdown();
-        return 0;
-    }
-    hr = MFCreateMediaType(&type);
-    if (SUCCEEDED(hr)) {
-        hr = type->lpVtbl->SetGUID(type, &MF_MT_MAJOR_TYPE, &MFMediaType_Audio);
-        if (SUCCEEDED(hr))
-            hr = type->lpVtbl->SetGUID(type, &MF_MT_SUBTYPE, &MFAudioFormat_PCM);
-        if (SUCCEEDED(hr))
-            hr = type->lpVtbl->SetUINT32(type, &MF_MT_AUDIO_NUM_CHANNELS, 1);
-        if (SUCCEEDED(hr))
-            hr = type->lpVtbl->SetUINT32(type, &MF_MT_AUDIO_SAMPLES_PER_SECOND, 44100);
-        if (SUCCEEDED(hr))
-            hr = type->lpVtbl->SetUINT32(type, &MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
-        if (SUCCEEDED(hr))
-            hr = type->lpVtbl->SetUINT32(type, &MF_MT_AUDIO_BLOCK_ALIGNMENT, 2);
-        if (SUCCEEDED(hr))
-            hr = type->lpVtbl->SetUINT32(type, &MF_MT_AUDIO_AVG_BYTES_PER_SECOND, 88200);
-        if (SUCCEEDED(hr))
-            hr = reader->lpVtbl->SetCurrentMediaType(reader,
-                        (DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, NULL, type);
-        type->lpVtbl->Release(type);
-    }
-    if (FAILED(hr)) {
-        reader->lpVtbl->Release(reader);
-        MFShutdown();
-        return 0;
-    }
-    for (;;) {
-        IMFSample *sample = NULL;
-        DWORD flags = 0;
-        LONGLONG ts = 0;
-        IMFMediaBuffer *mbuf = NULL;
-        BYTE *data = NULL;
-        DWORD maxLen = 0, curLen = 0;
-        hr = reader->lpVtbl->ReadSample(reader,
-                    (DWORD)MF_SOURCE_READER_FIRST_AUDIO_STREAM, 0, NULL,
-                    &flags, &ts, &sample);
-        if (FAILED(hr) || !sample)
-            break;
-        if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
-            sample->lpVtbl->Release(sample);
-            break;
-        }
-        hr = sample->lpVtbl->ConvertToContiguousBuffer(sample, &mbuf);
-        if (SUCCEEDED(hr) && mbuf) {
-            hr = mbuf->lpVtbl->Lock(mbuf, &data, &maxLen, &curLen);
-            if (SUCCEEDED(hr) && data && curLen > 0) {
-                if (len + curLen > cap) {
-                    size_t ncap = cap ? cap * 2 : 262144;
-                    short *np;
-                    while (ncap < len + curLen)
-                        ncap *= 2;
-                    np = (short *)realloc(pcm, ncap);
-                    if (!np)
-                        break;
-                    pcm = np;
-                    cap = ncap;
-                }
-                memcpy((BYTE *)pcm + len, data, curLen);
-                len += curLen;
-            }
-            if (mbuf) {
-                mbuf->lpVtbl->Unlock(mbuf);
-                mbuf->lpVtbl->Release(mbuf);
-            }
-        }
-        sample->lpVtbl->Release(sample);
-    }
-    reader->lpVtbl->Release(reader);
-    MFShutdown();
-    frames = (int)(len / 2);
-    if (frames <= 0) {
-        free(pcm);
-        return 0;
-    }
-    *out = pcm;
-    return frames;
-}
-
-/* Read a whole text file into a malloc'd NUL-terminated buffer. */
-static char *mv_read_text(const char *path) {
-    FILE *f = fopen(path, "rb");
-    long sz;
-    char *buf;
-    if (!f)
-        return NULL;
-    fseek(f, 0, SEEK_END);
-    sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz <= 0 || sz > 4 * 1024 * 1024) {
-        fclose(f);
-        return NULL;
-    }
-    buf = (char *)malloc((size_t)sz + 1);
-    if (!buf) {
-        fclose(f);
-        return NULL;
-    }
-    if (fread(buf, 1, (size_t)sz, f) != (size_t)sz) {
-        free(buf);
-        fclose(f);
-        return NULL;
-    }
-    buf[sz] = '\0';
-    fclose(f);
-    return buf;
-}
-
-/* Find a key's [start_ms, end_ms] timing in a pack config.json.
-   Returns TRUE and fills startMs/endMs. */
-static BOOL mv_key_timing(const char *cfg, const char *key, double *startMs, double *endMs) {
-    char pat[64];
-    const char *p, *t;
-    snprintf(pat, sizeof(pat), "\"%s\"", key);
-    p = strstr(cfg, pat);
-    if (!p)
-        return FALSE;
-    t = strstr(p, "\"timing\"");
-    if (!t)
-        return FALSE;
-    t = strchr(t, '[');
-    if (!t)
-        return FALSE;
-    t++;  /* past outer [ */
-    t = strchr(t, '[');
-    if (!t)
-        return FALSE;
-    t++;
-    *startMs = strtod(t, NULL);
-    t = strchr(t, ',');
-    if (!t)
-        return FALSE;
-    t++;
-    *endMs = strtod(t, NULL);
-    return (*endMs > *startMs);
-}
-
-/* Normalize a PCM slice to 0.4 peak and write it as a WAV. */
-static BOOL mv_write_slice(const short *pcm, int frames, double startMs, double endMs,
-                           const char *outPath) {
-    int s0 = (int)(startMs * 44.1);
-    int s1 = (int)(endMs * 44.1);
-    int n, i, peak = 0;
-    short *buf;
-    if (!pcm || s0 < 0 || s1 <= s0 || s1 > frames)
-        return FALSE;
-    n = s1 - s0;
-    buf = (short *)malloc(sizeof(short) * (size_t)n);
-    if (!buf)
-        return FALSE;
-    for (i = 0; i < n; i++) {
-        int v = pcm[s0 + i];
-        if (v < 0)
-            v = -v;
-        if (v > peak)
-            peak = v;
-        buf[i] = pcm[s0 + i];
-    }
-    if (peak > 0) {
-        double g = (0.4 * 32767.0) / (double)peak;
-        for (i = 0; i < n; i++)
-            buf[i] = (short)(buf[i] * g);
-    }
-    {
-        BOOL ok = write_wav_file(outPath, buf, n);
-        free(buf);
-        return ok;
-    }
-}
-
-/* Register an installed pack as a profile (registry) and rebuild. */
-static void register_added_profile(const char *folder, const char *name, int cat) {
-    HKEY k;
-    DWORD n = 0, sz = sizeof(n), t = REG_DWORD;
-    char vname[32];
-    if (RegCreateKeyExA(HKEY_CURRENT_USER,
-                        "Software\\MechSounds\\AddedProfiles", 0, NULL, 0,
-                        KEY_READ | KEY_WRITE, NULL, &k, NULL) != ERROR_SUCCESS)
-        return;
-    if (RegQueryValueExA(k, "Count", NULL, &t, (BYTE *)&n, &sz) != ERROR_SUCCESS)
-        n = 0;
-    snprintf(vname, sizeof(vname), "Folder%lu", (unsigned long)n);
-    RegSetValueExA(k, vname, 0, REG_SZ, (const BYTE *)folder, (DWORD)strlen(folder) + 1);
-    snprintf(vname, sizeof(vname), "Name%lu", (unsigned long)n);
-    RegSetValueExA(k, vname, 0, REG_SZ, (const BYTE *)name, (DWORD)strlen(name) + 1);
-    snprintf(vname, sizeof(vname), "Cat%lu", (unsigned long)n);
-    {
-        DWORD c = (DWORD)cat;
-        RegSetValueExA(k, vname, 0, REG_DWORD, (const BYTE *)&c, sizeof(c));
-    }
-    n++;
-    RegSetValueExA(k, "Count", 0, REG_DWORD, (const BYTE *)&n, sizeof(n));
-    RegCloseKey(k);
-    init_runtime_profiles();
-}
-
-/* Map a switchType string to a tab category (0-4). */
-static int mv_cat_from_switch(const char *sw) {
-    if (!sw || !sw[0])
-        return 0;
-    if (_stricmp(sw, "tactile") == 0)
-        return 1;
-    if (_stricmp(sw, "clicky") == 0)
-        return 3;
-    if (_stricmp(sw, "magnetic") == 0 || _stricmp(sw, "hall effect") == 0)
-        return 4;
-    if (_stricmp(sw, "topre") == 0)
-        return 2;
-    return 0;  /* linear / unknown */
-}
-
-/* Install one search result: download, extract, convert, register.
-   Returns a status string for the chooser. */
-static const char *mv_install_pack(int idx) {
-    MVPack *pk;
-    char zip[MAX_PATH], dest[MAX_PATH], cfgPath[MAX_PATH];
-    char *cfg = NULL, *audioPath = NULL;
-    char method[16], audioFile[256];
-    char folder[64], dispName[128];
-    short *pcm = NULL;
-    int frames = 0, i, made = 0;
-    static const char *downKeys[6] = { "KeyA", "KeyS", "KeyD", "KeyF", "KeyG", "KeyH" };
-    if (idx < 0 || idx >= mvResultCount)
-        return "Pick a pack from the list first.";
-    pk = &mvResults[idx];
-    if (!mv_download_pack(pk->id, zip, sizeof(zip)))
-        return "Download failed. Check your connection and try again.";
-    snprintf(dest, sizeof(dest), "%s\\pack", tempDir);
-    if (!mv_unzip(zip, dest))
-        return "Couldn't open the pack zip.";
-    snprintf(cfgPath, sizeof(cfgPath), "%s\\config.json", dest);
-    cfg = mv_read_text(cfgPath);
-    if (!cfg)
-        return "Pack has no config.json — can't use it.";
-    if (!mv_json_str(cfg, "definition_method", method, sizeof(method)))
-        snprintf(method, sizeof(method), "single");
-    if (!mv_json_str(cfg, "audio_file", audioFile, sizeof(audioFile))) {
-        /* "multi" packs name a file per key; fall back to the first audio file. */
-        WIN32_FIND_DATAA fd;
-        HANDLE h;
-        char pat[MAX_PATH];
-        snprintf(pat, sizeof(pat), "%s\\*.wav", dest);
-        h = FindFirstFileA(pat, &fd);
-        if (h == INVALID_HANDLE_VALUE) {
-            snprintf(pat, sizeof(pat), "%s\\*.mp3", dest);
-            h = FindFirstFileA(pat, &fd);
-        }
-        if (h == INVALID_HANDLE_VALUE) {
-            snprintf(pat, sizeof(pat), "%s\\*.ogg", dest);
-            h = FindFirstFileA(pat, &fd);
-        }
-        if (h == INVALID_HANDLE_VALUE) {
-            free(cfg);
-            return "No audio file found in the pack.";
-        }
-        snprintf(audioFile, sizeof(audioFile), "%s", fd.cFileName);
-        FindClose(h);
-        snprintf(method, sizeof(method), "single");
-    }
-    {
-        char ap[MAX_PATH];
-        snprintf(ap, sizeof(ap), "%s\\%s", dest, audioFile);
-        audioPath = ap;
-        frames = mv_decode_audio(audioPath, &pcm);
-    }
-    if (!pcm || frames <= 0) {
-        free(cfg);
-        return "Couldn't decode the pack's audio.";
-    }
-    /* Folder + display name for the new profile. */
-    {
-        const char *s = pk->name;
-        int o = 0;
-        for (; *s && o < (int)sizeof(folder) - 1; s++) {
-            if ((*s >= 'A' && *s <= 'Z') || (*s >= 'a' && *s <= 'z') ||
-                (*s >= '0' && *s <= '9'))
-                folder[o++] = *s;
-        }
-        folder[o] = '\0';
-        if (!folder[0])
-            snprintf(folder, sizeof(folder), "Added%d", idx);
-        snprintf(dispName, sizeof(dispName), "%s%s%s",
-                 pk->name,
-                 pk->keyboard[0] ? " - " : "",
-                 pk->keyboard);
-    }
-    {
-        char dir[MAX_PATH];
-        snprintf(dir, sizeof(dir), "%s\\sounds\\%s", exeDir, folder);
-        CreateDirectoryA(dir, NULL);
-        /* 6 down variants from 6 different keys, space from Space. */
-        for (i = 0; i < 6; i++) {
-            double s0, e0;
-            char out[MAX_PATH];
-            if (!mv_key_timing(cfg, downKeys[i], &s0, &e0)) {
-                /* Fall back: spread evenly across the audio. */
-                double totalMs = (double)frames * 1000.0 / 44100.0;
-                s0 = totalMs * i / 6.0;
-                e0 = s0 + 200.0;
-                if (e0 > totalMs)
-                    e0 = totalMs;
-            }
-            snprintf(out, sizeof(out), "%s\\down%d.wav", dir, i + 1);
-            if (mv_write_slice(pcm, frames, s0, e0, out))
-                made++;
-        }
-        {
-            double s0, e0;
-            char out[MAX_PATH];
-            if (!mv_key_timing(cfg, "Space", &s0, &e0)) {
-                double totalMs = (double)frames * 1000.0 / 44100.0;
-                s0 = totalMs * 0.5;
-                e0 = s0 + 200.0;
-                if (e0 > totalMs)
-                    e0 = totalMs;
-            }
-            snprintf(out, sizeof(out), "%s\\space1.wav", dir);
-            if (mv_write_slice(pcm, frames, s0, e0, out))
-                made++;
-        }
-    }
-    free(pcm);
-    free(cfg);
-    if (made < 7)
-        return "Installed, but some sounds are missing.";
-    register_added_profile(folder, dispName, mv_cat_from_switch(pk->switchType));
-    return "Installed! Pick it from the tabs above.";
-}
-
 /* ---------------- chooser window ---------------------------------- */
 
 static void create_chooser(void);
@@ -1696,14 +1248,14 @@ static void create_chooser(void);
 /* Profiles grouped by switch type, one tab per type in the chooser.
    Built-in grouping (compile-time, used to seed the runtime table). */
 static const char *CatNames[5] = { "Linear", "Tactile", "Topre", "Clicky", "Hall Effect" };
-static const int CatProfs[5][9] = {
-    { 0, 1, 3, 6, 7, 8, 9, 10, 14 },
-    { 2 },
-    { 4 },
-    { 5, 12 },
-    { 11, 13 }
+static const int CatProfs[5][10] = {
+    { 0, 1, 3, 6, 7, 8, 9, 10, 14, 15 },
+    { 2, 16, 17, 18, 19, 20, 21, 22, 23, 24 },
+    { 4, 25, 26, 27 },
+    { 5, 12, 28, 29, 30, 31, 32, 33, 34, 35 },
+    { 11, 13, 36, 37, 38, 39, 40, 41, 42, 43 }
 };
-static const int CatCounts[5] = { 9, 1, 1, 2, 2 };
+static const int CatCounts[5] = { 10, 10, 4, 10, 10 };
 
 /* Category of a built-in profile index, from the table above. */
 static int builtin_cat(int prof) {
@@ -1733,44 +1285,15 @@ static void rebuild_tab_groups(void) {
     }
 }
 
-/* Build the runtime profile table: 15 built-ins, then any packs the
-   user added via search-and-add (registry, see register_added_profile). */
+/* Build the runtime profile table from the built-in tables below. */
 static void init_runtime_profiles(void) {
     int i;
-    HKEY k;
     for (i = 0; i < NPROFILES_BUILTIN; i++) {
         snprintf(RTFolders[i], sizeof(RTFolders[i]), "%s", Profiles[i]);
         snprintf(RTNames[i], sizeof(RTNames[i]), "%s", ProfileNames[i]);
         RTCat[i] = builtin_cat(i);
     }
     rtNProfiles = NPROFILES_BUILTIN;
-    if (RegOpenKeyExA(HKEY_CURRENT_USER,
-                      "Software\\MechSounds\\AddedProfiles", 0,
-                      KEY_READ, &k) == ERROR_SUCCESS) {
-        DWORD n = 0, sz = sizeof(n), t = REG_DWORD;
-        if (RegQueryValueExA(k, "Count", NULL, &t, (BYTE *)&n, &sz) == ERROR_SUCCESS) {
-            for (i = 0; i < (int)n && rtNProfiles < MAX_PROFILES; i++) {
-                char vname[32], folder[64], name[128];
-                DWORD cat = 0;
-                snprintf(vname, sizeof(vname), "Folder%d", i);
-                sz = sizeof(folder);
-                if (RegQueryValueExA(k, vname, NULL, NULL, (BYTE *)folder, &sz) != ERROR_SUCCESS)
-                    continue;
-                snprintf(vname, sizeof(vname), "Name%d", i);
-                sz = sizeof(name);
-                if (RegQueryValueExA(k, vname, NULL, NULL, (BYTE *)name, &sz) != ERROR_SUCCESS)
-                    continue;
-                snprintf(vname, sizeof(vname), "Cat%d", i);
-                sz = sizeof(cat); t = REG_DWORD;
-                RegQueryValueExA(k, vname, NULL, &t, (BYTE *)&cat, &sz);
-                snprintf(RTFolders[rtNProfiles], sizeof(RTFolders[0]), "%s", folder);
-                snprintf(RTNames[rtNProfiles], sizeof(RTNames[0]), "%s", name);
-                RTCat[rtNProfiles] = (cat < 5) ? (int)cat : 0;
-                rtNProfiles++;
-            }
-        }
-        RegCloseKey(k);
-    }
     customIndex = rtNProfiles;
     rebuild_tab_groups();
 }
@@ -1903,68 +1426,6 @@ static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
                 apply_volume();
                 save_settings();
             }
-        } else if (id == ID_CH_SEARCH_BTN && code == BN_CLICKED) {
-            char q[128], status[256];
-            HWND list = GetDlgItem(h, ID_CH_RESULTS);
-            HWND st = GetDlgItem(h, ID_CH_SEARCH_STATUS);
-            GetWindowTextA(GetDlgItem(h, ID_CH_SEARCH), q, sizeof(q));
-            SendMessage(list, LB_RESETCONTENT, 0, 0);
-            if (!q[0]) {
-                SetWindowTextA(st, "Type a keyboard name first.");
-            } else {
-                int n;
-                SetWindowTextA(st, "Searching MechVibes...");
-                UpdateWindow(h);
-                n = mv_search(q);
-                if (n < 0) {
-                    SetWindowTextA(st, "Search failed. Check your connection.");
-                } else if (n == 0) {
-                    SetWindowTextA(st, "No packs found for that keyboard.");
-                } else {
-                    int i;
-                    for (i = 0; i < n; i++) {
-                        char line[320];
-                        snprintf(line, sizeof(line), "%s — %s%s%s",
-                                 mvResults[i].name,
-                                 mvResults[i].keyboard,
-                                 mvResults[i].switchName[0] ? " — " : "",
-                                 mvResults[i].switchName);
-                        SendMessage(list, LB_ADDSTRING, 0, (LPARAM)line);
-                    }
-                    snprintf(status, sizeof(status),
-                             "Found %d pack%s. Double-click one to install it.",
-                             n, n == 1 ? "" : "s");
-                    SetWindowTextA(st, status);
-                }
-            }
-        } else if (id == ID_CH_RESULTS && code == LBN_DBLCLK) {
-            int sel = (int)SendMessage((HWND)lp, LB_GETCURSEL, 0, 0);
-            HWND st = GetDlgItem(h, ID_CH_SEARCH_STATUS);
-            const char *msg;
-            if (sel < 0 || sel >= mvResultCount)
-                return 0;
-            SetWindowTextA(st, "Installing... (downloading and converting)");
-            UpdateWindow(h);
-            msg = mv_install_pack(sel);
-            SetWindowTextA(st, msg);
-            if (strncmp(msg, "Installed!", 10) == 0) {
-                /* New profile is in the table now: rebuild the chooser
-                   radios so it shows up on its tab. */
-                DestroyWindow(h);
-                hwndChooser = NULL;
-                create_chooser();
-            }
-        } else if (id == ID_CH_RESULTS && code == LBN_SELCHANGE) {
-            int sel = (int)SendMessage((HWND)lp, LB_GETCURSEL, 0, 0);
-            HWND st = GetDlgItem(h, ID_CH_SEARCH_STATUS);
-            if (sel >= 0 && sel < mvResultCount) {
-                char info[320];
-                snprintf(info, sizeof(info), "%s — %s — %s. Double-click to install.",
-                         mvResults[sel].name,
-                         mvResults[sel].keyboard,
-                         mvResults[sel].license[0] ? mvResults[sel].license : "Unknown license");
-                SetWindowTextA(st, info);
-            }
         }
         return 0;
     }
@@ -1972,6 +1433,11 @@ static LRESULT CALLBACK ChooserProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         if (!running)
             PostQuitMessage(0);   /* never started: quitting the chooser quits the app */
         DestroyWindow(h);
+        hwndChooser = NULL;
+        return 0;
+    case WM_DESTROY:
+        /* Cleared here too: the main window destroys the chooser
+           on Exit, and that path does not go through WM_CLOSE. */
         hwndChooser = NULL;
         return 0;
     }
@@ -1984,7 +1450,7 @@ static void create_chooser(void) {
         SetForegroundWindow(hwndChooser);
         return;
     }
-    int w = 400, hh = 704;
+    int w = 400, hh = 568;
     int x = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
     int y = (GetSystemMetrics(SM_CYSCREEN) - hh) / 2;
     char title[64];
@@ -1996,6 +1462,14 @@ static void create_chooser(void) {
                                   x, y, w, hh, NULL, NULL, hInst, NULL);
     if (!hwndChooser)
         return;
+    /* Custom keycap icon in the chooser title bar. */
+    {
+        HICON ic = LoadIcon(hInst, MAKEINTRESOURCE(IDI_APP));
+        if (ic) {
+            SendMessage(hwndChooser, WM_SETICON, ICON_SMALL, (LPARAM)ic);
+            SendMessage(hwndChooser, WM_SETICON, ICON_BIG, (LPARAM)ic);
+        }
+    }
     HFONT font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
     HWND c;
 
@@ -2012,7 +1486,7 @@ static void create_chooser(void) {
        Radios never do that. */
     hwndTab = CreateWindowExA(0, WC_TABCONTROL, NULL,
                               WS_CHILD | WS_VISIBLE | TCS_TABS,
-                              12, 30, 376, 200,
+                              12, 30, 376, 220,
                               hwndChooser, (HMENU)ID_CH_TAB, hInst, NULL);
     SendMessage(hwndTab, WM_SETFONT, (WPARAM)font, TRUE);
     for (int c = 0; c < 5; c++) {
@@ -2056,13 +1530,13 @@ static void create_chooser(void) {
     }
 
     c = CreateWindowExA(0, "STATIC", "- or build your own -",
-                        WS_CHILD | WS_VISIBLE, 16, 240, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 260, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Custom build - tune it below",
                         WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-                        16, 258, 368, 20,
+                        16, 278, 368, 20,
                         hwndChooser, (HMENU)(ID_CH_RADIO_BASE + rtNProfiles), hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     if (curProfile == customIndex)
@@ -2073,35 +1547,35 @@ static void create_chooser(void) {
     static const char *caseItems[] = { "Plastic", "Aluminum", "Brass" };
     static const char *modItems[] = { "None", "Tape mod", "O-rings", "Tape + O-rings" };
     c = CreateWindowExA(0, "STATIC", "Switch:",
-                        WS_CHILD | WS_VISIBLE, 16, 284, 48, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 304, 48, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_SW, 66, 282, 118, swItems, 3, customSwitch);
+    make_combo(hwndChooser, ID_CH_SW, 66, 302, 118, swItems, 3, customSwitch);
     c = CreateWindowExA(0, "STATIC", "Lube:",
-                        WS_CHILD | WS_VISIBLE, 204, 284, 42, 16,
+                        WS_CHILD | WS_VISIBLE, 204, 304, 42, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_LUBE, 248, 282, 118, lubeItems, 2, customLube);
+    make_combo(hwndChooser, ID_CH_LUBE, 248, 302, 118, lubeItems, 2, customLube);
     c = CreateWindowExA(0, "STATIC", "Case:",
-                        WS_CHILD | WS_VISIBLE, 16, 312, 48, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 332, 48, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_CASE, 66, 310, 118, caseItems, 3, customCase);
+    make_combo(hwndChooser, ID_CH_CASE, 66, 330, 118, caseItems, 3, customCase);
     c = CreateWindowExA(0, "STATIC", "Mods:",
-                        WS_CHILD | WS_VISIBLE, 204, 312, 42, 16,
+                        WS_CHILD | WS_VISIBLE, 204, 332, 42, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    make_combo(hwndChooser, ID_CH_MODS, 248, 310, 118, modItems, 4, customMods);
+    make_combo(hwndChooser, ID_CH_MODS, 248, 330, 118, modItems, 4, customMods);
     set_custom_enabled(curProfile == customIndex);
 
     c = CreateWindowExA(0, "STATIC", "Volume:",
-                        WS_CHILD | WS_VISIBLE, 16, 346, 56, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 366, 56, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     HWND vol = CreateWindowExA(0, "COMBOBOX", NULL,
                                WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL,
-                               78, 344, 100, 120,
+                               78, 364, 100, 120,
                                hwndChooser, (HMENU)ID_CH_VOLUME, hInst, NULL);
     SendMessage(vol, WM_SETFONT, (WPARAM)font, TRUE);
     const char *volNames[] = { "100%", "80%", "60%", "40%", "20%" };
@@ -2115,7 +1589,7 @@ static void create_chooser(void) {
 
     HWND chk = CreateWindowExA(0, "BUTTON", "Start MechSounds with Windows",
                                WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                               16, 374, 260, 20,
+                               16, 394, 260, 20,
                                hwndChooser, (HMENU)ID_CH_STARTUP, hInst, NULL);
     SendMessage(chk, WM_SETFONT, (WPARAM)font, TRUE);
     SendMessage(chk, BM_SETCHECK,
@@ -2123,54 +1597,29 @@ static void create_chooser(void) {
 
     HWND gchk = CreateWindowExA(0, "BUTTON", "Pause sounds automatically in games",
                                 WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-                                16, 398, 300, 20,
+                                16, 418, 300, 20,
                                 hwndChooser, (HMENU)ID_CH_GAMEPAUSE, hInst, NULL);
     SendMessage(gchk, WM_SETFONT, (WPARAM)font, TRUE);
     SendMessage(gchk, BM_SETCHECK,
                 pauseInGames ? BST_CHECKED : BST_UNCHECKED, 0);
 
-    /* Search MechVibes: type your keyboard, pick a pack, it installs. */
-    c = CreateWindowExA(0, "STATIC", "Search MechVibes for your keyboard:",
-                        WS_CHILD | WS_VISIBLE, 16, 424, 368, 16,
-                        hwndChooser, NULL, hInst, NULL);
-    SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    HWND sedit = CreateWindowExA(0, "EDIT", NULL,
-                                 WS_CHILD | WS_VISIBLE | WS_BORDER | ES_AUTOHSCROLL,
-                                 16, 442, 260, 22,
-                                 hwndChooser, (HMENU)ID_CH_SEARCH, hInst, NULL);
-    SendMessage(sedit, WM_SETFONT, (WPARAM)font, TRUE);
-    c = CreateWindowExA(0, "BUTTON", "Search",
-                        WS_CHILD | WS_VISIBLE,
-                        284, 442, 84, 22,
-                        hwndChooser, (HMENU)ID_CH_SEARCH_BTN, hInst, NULL);
-    SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-    HWND slist = CreateWindowExA(0, "LISTBOX", NULL,
-                                 WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | LBS_NOTIFY,
-                                 16, 470, 352, 84,
-                                 hwndChooser, (HMENU)ID_CH_RESULTS, hInst, NULL);
-    SendMessage(slist, WM_SETFONT, (WPARAM)font, TRUE);
-    c = CreateWindowExA(0, "STATIC", "Type a keyboard name and hit Search.",
-                        WS_CHILD | WS_VISIBLE, 16, 560, 368, 16,
-                        hwndChooser, (HMENU)ID_CH_SEARCH_STATUS, hInst, NULL);
-    SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
-
     c = CreateWindowExA(0, "STATIC", "Start hides this window - sounds keep playing",
-                        WS_CHILD | WS_VISIBLE, 16, 586, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 450, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "STATIC", "from the tray icon. Double-click the tray icon to pick again.",
-                        WS_CHILD | WS_VISIBLE, 16, 604, 368, 16,
+                        WS_CHILD | WS_VISIBLE, 16, 468, 368, 16,
                         hwndChooser, NULL, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
     c = CreateWindowExA(0, "BUTTON", "Start",
                         WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-                        216, 630, 80, 26,
+                        216, 494, 80, 26,
                         hwndChooser, (HMENU)ID_CH_START, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
     c = CreateWindowExA(0, "BUTTON", "Quit",
                         WS_CHILD | WS_VISIBLE,
-                        304, 630, 80, 26,
+                        304, 494, 80, 26,
                         hwndChooser, (HMENU)ID_CH_QUIT, hInst, NULL);
     SendMessage(c, WM_SETFONT, (WPARAM)font, TRUE);
 
@@ -2227,7 +1676,14 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     case WM_COMMAND:
         if (LOWORD(wp) == ID_TRAY_EXIT) {
-            PostMessage(h, WM_CLOSE, 0, 0);
+            /* Exit must actually end the process: destroy the
+               chooser if it is open, then destroy this window.
+               WM_DESTROY does the cleanup and posts the quit. */
+            if (hwndChooser) {
+                DestroyWindow(hwndChooser);
+                hwndChooser = NULL;
+            }
+            DestroyWindow(h);
         } else if (LOWORD(wp) == ID_TRAY_TOGGLE) {
             enabled = !enabled;
             update_tip();
@@ -2249,7 +1705,16 @@ static LRESULT CALLBACK WndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             }
         }
         return 0;
+    case WM_CLOSE:
+        /* Explicit close: a message-only window must not rely on
+           DefWindowProc to tear itself down. */
+        DestroyWindow(h);
+        return 0;
     case WM_DESTROY:
+        if (hwndChooser) {
+            DestroyWindow(hwndChooser);
+            hwndChooser = NULL;
+        }
         free_profile_sounds();
         if (hHook)
             UnhookWindowsHookEx(hHook);
@@ -2300,11 +1765,13 @@ int WINAPI WinMain(HINSTANCE hi, HINSTANCE hPrev, LPSTR cmd, int show) {
 
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hi;
+    wc.hIcon = LoadIcon(hi, MAKEINTRESOURCE(IDI_APP));
     wc.lpszClassName = "MechSoundsWnd";
     RegisterClassA(&wc);
 
     wc2.lpfnWndProc = ChooserProc;
     wc2.hInstance = hi;
+    wc2.hIcon = LoadIcon(hi, MAKEINTRESOURCE(IDI_APP));
     wc2.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc2.hbrBackground = (HBRUSH)(COLOR_BTNFACE + 1);
     wc2.lpszClassName = "MechSoundsChooser";

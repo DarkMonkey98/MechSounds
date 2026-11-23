@@ -29,7 +29,7 @@ never pause (the setting is remembered).
 
 ## Get it
 
-[Download MechSounds v15](https://muse.ai/files/1323371437529100/29320095037601332/w0ngcz27rgl0lwrbru1a3d2y/MechSounds-v15.zip) — ready-to-run zip (exe + sounds).
+[Download MechSounds v16](https://muse.ai/files/1323371437529100/2086694475381504/gxzr3qy1vuuy1sm30ghkvpoi/MechSounds-v16.zip) — ready-to-run zip (exe + sounds).
 Unzip it anywhere and double-click `MechSounds.exe` — the `sounds/`
 folder must stay next to the exe.
 
@@ -37,15 +37,21 @@ Or build the exe from the source below.
 
 ## Build it
 
-The app is a single C file. Build it with Zig (any recent version):
+The app is a single C file. Build it with Zig (any recent version).
+First build the icon resource from the .rc file (only needed once,
+or after the icon changes):
 
 ```sh
-zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows -o MechSounds.exe MechSounds.c -lwinmm -lgdi32 -lshell32 -lcomctl32 -lwininet -lmfplat -lmfreadwrite -lmfuuid -lole32
+zig rc mechsounds.rc mechsounds.res
+zig cc -target x86_64-windows-gnu -O2 -Wl,--subsystem,windows -o MechSounds.exe MechSounds.c mechsounds.res -lwinmm -lgdi32 -lshell32 -lcomctl32
 ```
 
 That produces a standalone `MechSounds.exe` — no installer, no
-dependencies beyond stock Windows. Put it in a folder next to a
-`sounds/` directory (see below) and double-click it.
+dependencies beyond stock Windows. The `mechsounds.res` is the
+embedded icon (built from `mechsounds.rc` with `zig rc`); the exe
+file, the tray icon and the chooser all use the orange keycap icon.
+Put it in a folder next to a `sounds/` directory (see below) and
+double-click it.
 
 ## Use it
 
@@ -67,13 +73,9 @@ Your pick and volume are remembered for next time.
   your last saved switch and volume.
 - **Change switches later:** double-click the tray icon to reopen
   the chooser, or right-click it and pick a switch from the menu.
-- **Add your own keyboard:** type your keyboard's name in the
-  "Search MechVibes" box and hit **Search**. If MechVibes has a
-  pack for that board, it shows up — double-click it to download,
-  convert and install it as a new profile on the right tab. If
-  that keyboard comes with different switch choices, they all
-  show up and you pick the one you have. Added packs are
-  remembered, so they stay in the list next time you open the app.
+- **Exit really exits:** right-click the tray icon → **Exit** ends
+  the process completely, so the folder can be deleted right after
+  — no more hunting in Task Manager.
 
 ## Controls
 
@@ -86,8 +88,10 @@ Everything is on the tray icon — no keyboard shortcuts.
 
 ## Switch profiles
 
-All fifteen are **real recordings** from [Mechvibes](https://mechvibes.com/sound-packs).
+All forty-four are **real recordings** from [Mechvibes](https://mechvibes.com/sound-packs).
 It starts on **Rainy 75 Pro** (the fullest sound).
+
+### Linear — 10 profiles
 
 | Profile | Character | MechVibes page |
 |---|---|---|
@@ -106,20 +110,82 @@ It starts on **Rainy 75 Pro** (the fullest sound).
 | HyperX Alloy | Cherry MX Blue — classic clicky | [HyperX Alloy](https://mechvibes.com/sound-packs/hyperx-alloy-cherry-mx-blue) |
 | Wooting 60HE | Lekker L60 Hall Effect — smooth magnetic | [Wooting 60HE V2](https://mechvibes.com/sound-packs/wooting-60he-v2) |
 | Epomaker TH85 | Creamy Jade linear — soft, creamy thock | [Epomaker Creamy Jade](https://mechvibes.com/sound-packs/epomaker-creamy-jade) |
+| Zoom TKL Morandi (lubed) | Zoom TKL Morandi — smooth, lubed linear | [Zoom TKL Morandi](https://mechvibes.com/sound-packs/zoom-tkl-morandi) |
 
-Eight of these (Keychron Q3, Ikki68 Aurora, Aula F75, Custom
-keyboard, Gravastar V60 Pro, HyperX Alloy, Wooting 60HE, Epomaker
-TH85) are the rest of Mechvibes' 10 most-downloaded keyboard packs
-— Rainy 75 Pro (#1) and Leobog Reaper (#4) were already in.
+### Tactile — 10 profiles
+
+| Profile | Character | MechVibes page |
+|---|---|---|
+| Crystal Panda | Keychron V1 Crystal Panda — crisp tactile thock | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Holy Panda Q66 | IQUNIX Q66 Holy Panda — deep, tactile thock | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| C3 Holy Panda | C3 Equalz Holy Panda — crisp tactile | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Machenike K500 | Machenike K500 Brown — tactile | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Keychron K4 Glorious Panda | Keychron K4 Glorious Panda — tactile | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| SK61 Brown | SK61 Gateron Brown — tactile | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| EG Crystal Purple | Everglide Crystal Purple — tactile | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Akko Lavender Purple | Akko CS Lavender Purple — tactile | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Cherry MX Brown PBT | Cherry MX Brown — classic tactile | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Logitech Pro X Brown | Logitech Pro X GX Brown — tactile | [Mechvibes library](https://mechvibes.com/sound-packs) |
+
+### Topre — 4 profiles (the only four Topre packs on MechVibes)
+
+| Profile | Character | MechVibes page |
+|---|---|---|
+| HHKB Topre 45g | Real Topre — soft, muted, deep thock | [HHKB Hybrid Topre](https://mechvibes.com/sound-packs/hhkb-hybrid-topre) |
+| Topre Purple Hybrid | Topre Purple Hybrid — soft Topre thock | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Silent Topres | Silent Topres 55g — muted Topre | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Korean Topre Clone | Electro-capacitive Korean clone — Topre-like | [Mechvibes library](https://mechvibes.com/sound-packs) |
+
+### Clicky — 10 profiles
+
+| Profile | Character | MechVibes page |
+|---|---|---|
+| IBM Model M | Buckling spring — loud, metallic click-clack | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| HyperX Alloy | Cherry MX Blue — classic clicky | [HyperX Alloy](https://mechvibes.com/sound-packs/hyperx-alloy-cherry-mx-blue) |
+| Clicky Perfect | Clicky Perfect — sharp clicky | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| RE2 Typewriter | RE2 Typewriter — typewriter click | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Logitech MX Mini | Logitech MX Mini Blue — clicky | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| HyperX Alloy Origins | HyperX Alloy Origins Blue — clicky | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| BlitzWolf KB1 Blue | BlitzWolf KB1 Blue — clicky | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Poseidon Z Kailh Blue | Poseidon Z Kailh Blue — clicky | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Neo80 Gateron Melodic | Neo80 Gateron Melodic — clicky | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Kailh Box White (GMK67) | Kailh Box White — crisp clicky | [Mechvibes library](https://mechvibes.com/sound-packs) |
+
+### Hall Effect — 10 profiles
+
+| Profile | Character | MechVibes page |
+|---|---|---|
+| Gravastar V60 Pro | GravaStar Hall Effect — creamy magnetic | [Gravastar V60 Pro](https://mechvibes.com/sound-packs/gravastar-v60-pro-lubed) |
+| Wooting 60HE | Lekker L60 Hall Effect — smooth magnetic | [Wooting 60HE V2](https://mechvibes.com/sound-packs/wooting-60he-v2) |
+| Wooting 60HE Lekker Tikken | Wooting 60HE Lekker Tikken — smooth magnetic | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Apex Pro TKL 2023 | SteelSeries Apex Pro TKL 2023 — magnetic | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Apex Pro TKL (kauankkj) | Apex Pro TKL — magnetic | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Wooting 60HE (Saint) | Wooting 60HE (Saint) — smooth magnetic | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| IQUNIX EV63 | IQUNIX EV63 Magnetic — magnetic | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Apex Pro TKL | SteelSeries Apex Pro TKL — magnetic | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Apex Pro OmniPoint | Apex Pro TKL OmniPoint — magnetic | [Mechvibes library](https://mechvibes.com/sound-packs) |
+| Apex Pro V2 | Apex Pro V2 — magnetic | [Mechvibes library](https://mechvibes.com/sound-packs) |
+
+Eight of the original fifteen (Keychron Q3, Ikki68 Aurora, Aula F75,
+Custom keyboard, Gravastar V60 Pro, HyperX Alloy, Wooting 60HE,
+Epomaker TH85) are the rest of Mechvibes' 10 most-downloaded
+keyboard packs — Rainy 75 Pro (#1) and Leobog Reaper (#4) were
+already in. The 29 new profiles are the top 10 most-downloaded
+packs of each switch type (Linear, Tactile, Clicky, Hall Effect)
+and all 4 Topre packs that exist on the site.
 
 One click per press: a key plays one recording when you press it
 and nothing when you let go — holding a key never re-triggers.
-Each key has its own sound: every profile has 6 slightly different
-recordings, and each key is assigned one of them, so the same key
-always sounds the same and different keys sound like themselves
-(pressing A over and over never changes its sound).
-Spacebar, Enter, Backspace and Tab play the spacebar's own, deeper
-recording (each pitch-shifted so the big keys sound distinct).
+Every key has its own sound: each profile carries a separate
+recording for every key the pack recorded (letters, digits,
+punctuation, function keys, arrows), so A sounds a little
+different from S, and S a little different from D — the way the
+real board sounds. Keys the pack never recorded fall back to one
+of 6 shared recordings, so no key is ever silent. Spacebar,
+Enter, Backspace and Tab play their own recordings when the pack
+has them, and fall back to the spacebar's own deeper recording
+(each pitch-shifted so the big keys sound distinct) when it
+doesn't.
 
 ## Latency
 
@@ -160,6 +226,11 @@ This is built so the sound never lags behind your fingers:
 ## Files
 
 - `MechSounds.c` — the app. Builds with Zig (see above).
+- `mechsounds.rc` / `mechsounds.res` / `mechsounds.ico` — the
+  orange keycap icon, embedded in the exe (tray icon, chooser
+  icon, and the exe file icon). Build the .res with `zig rc
+  mechsounds.rc mechsounds.res`.
+- `mechsounds-icon.png` — the icon artwork.
 - `screenshot.png` — the chooser window, as shown above.
 - `MechSounds.py` — same app as a Python script (stdlib only).
   Run `python MechSounds.py` next to a `sounds/` folder.

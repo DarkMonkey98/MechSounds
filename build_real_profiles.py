@@ -45,6 +45,36 @@ PACKS = [
     ('hyperx-alloy', 'HyperXAlloy'),
     ('wooting-60he', 'Wooting60HE'),
     ('epomaker-th85', 'EpomakerTH85'),
+    # Top 10 per switch type (Nov 2026), new in v16
+    ('zoom-tkl-morandi', 'ZoomTKL'),
+    ('holy-panda-q66', 'HolyPanda'),
+    ('c3-holy-panda', 'C3HolyPanda'),
+    ('machenike-k500', 'MachenikeK500'),
+    ('keychron-k4-panda', 'KeychronK4'),
+    ('sk61-brown', 'SK61Brown'),
+    ('eg-crystal-purple', 'EGCrystalPurple'),
+    ('akko-lavender', 'AkkoLavender'),
+    ('cherrymx-brown', 'CherryMXBrown'),
+    ('logitech-prox-brown', 'LogitechProX'),
+    ('topre-purple', 'ToprePurple'),
+    ('silent-topres', 'SilentTopres'),
+    ('korean-topre-clone', 'KoreanTopre'),
+    ('clicky-perfect', 'ClickyPerfect'),
+    ('re2-typewriter', 'RE2Typewriter'),
+    ('logitech-mx-mini', 'LogitechMXMini'),
+    ('hyperx-origins', 'HyperXOrigins'),
+    ('blitzwolf-kb1', 'BlitzWolfKB1'),
+    ('poseidon-z', 'PoseidonZ'),
+    ('neo80-melodic', 'Neo80Melodic'),
+    ('kailh-box-white', 'KailhBoxWhite'),
+    ('wooting-tikken', 'WootingTikken'),
+    ('apex-pro-2023', 'ApexPro2023'),
+    ('apex-pro-kauankkj', 'ApexProKauankkj'),
+    ('wooting-saint', 'WootingSaint'),
+    ('iqunix-ev63', 'IQUNIXEV63'),
+    ('apex-pro-tkl', 'ApexProTKL'),
+    ('apex-pro-omni', 'ApexProOmni'),
+    ('apex-pro-v2', 'ApexProV2'),
 ]
 
 
@@ -129,6 +159,68 @@ def to_out(y, sr):
     return y
 
 
+def write_per_key_single(y, sr, cfg, out):
+    """One key_<Code>.wav per key in the pack's definitions, so every
+    physical key plays its own recording. Space uses 300 ms, the
+    rest 200 ms. Returns the list of key codes written."""
+    defs = cfg['definitions']
+    written = []
+    for code in sorted(defs):
+        t = defs[code]['timing']
+        s0 = min(x[0] for x in t)
+        s1 = max(x[1] for x in t)
+        total = 300 if code == 'Space' else 200
+        seg = slice_around_peak(y, sr, s0, s1, total_ms=total)
+        if len(seg) == 0:
+            continue
+        wavfile.write(os.path.join(out, f'key_{code}.wav'), SR_OUT,
+                      finish(to_out(seg, sr)))
+        written.append(code)
+    return written
+
+
+def write_per_key_single_window(y, sr, cfg, out):
+    """Single-recording pack: one window for everything. Give every
+    key its own file by pitch-shifting the one clip a little per
+    key, so keys still sound slightly different from each other."""
+    defs = cfg['definitions']
+    base = slice_around_peak(y, sr, *defs[sorted(defs)[0]]['timing'][0],
+                             total_ms=200)
+    codes = sorted(defs)
+    written = []
+    for i, code in enumerate(codes):
+        # spread pitch 0.92..1.08 across the keys
+        f = 0.92 + 0.16 * (i / max(1, len(codes) - 1))
+        seg = pitch(base, sr, f) if abs(f - 1.0) > 0.001 else base
+        total = 300 if code == 'Space' else 200
+        if total == 300:
+            seg = pitch(base, sr, 0.8)
+        wavfile.write(os.path.join(out, f'key_{code}.wav'), SR_OUT,
+                      finish(to_out(seg, sr)))
+        written.append(code)
+    return written
+
+
+def write_per_key_multi(src, cfg, out):
+    """Multi-file pack: one key_<Code>.wav per key, from that key's
+    own audio file."""
+    defs = cfg['definitions']
+    written = []
+    for code in sorted(defs):
+        f = defs[code].get('audio_file')
+        if not f:
+            continue
+        sr, y = load_audio(os.path.join(src, f))
+        total = 300 if code == 'Space' else 200
+        seg = slice_around_peak_file(y, sr, total_ms=total)
+        if len(seg) == 0:
+            continue
+        wavfile.write(os.path.join(out, f'key_{code}.wav'), SR_OUT,
+                      finish(to_out(seg, sr)))
+        written.append(code)
+    return written
+
+
 def build_single(src, profile, audio_file):
     sr, y = load_audio(os.path.join(src, audio_file))
     cfg = json.load(open(os.path.join(src, 'config.json')))
@@ -166,6 +258,7 @@ def build_single(src, profile, audio_file):
         seg = pitch(base, sr, 0.8)
         wavfile.write(os.path.join(out, 'space1.wav'), SR_OUT,
                       finish(to_out(seg, sr)))
+        keys = write_per_key_single_window(y, sr, cfg, out)
     else:
         for i, w in enumerate(picks, 1):
             seg = slice_around_peak(y, sr, *w, total_ms=200)
@@ -174,8 +267,10 @@ def build_single(src, profile, audio_file):
         seg = slice_around_peak(y, sr, s0, s1, total_ms=300)
         wavfile.write(os.path.join(out, 'space1.wav'), SR_OUT,
                       finish(to_out(seg, sr)))
+        keys = write_per_key_single(y, sr, cfg, out)
     print(f'{profile}: {len(windows)} recordings in pack, '
-          f'down windows {[(round(w[1]-w[0]), windows[w][:1]) for w in picks]}')
+          f'down windows {[(round(w[1]-w[0]), windows[w][:1]) for w in picks]}, '
+          f'per-key files: {len(keys)}')
 
 
 def build_multi(src, profile):
@@ -201,7 +296,9 @@ def build_multi(src, profile):
     seg = slice_around_peak_file(y, sr, total_ms=300)
     wavfile.write(os.path.join(out, 'space1.wav'), SR_OUT,
                   finish(to_out(seg, sr)))
-    print(f'{profile}: multi-file pack, downs {downs}, space {space_f}')
+    keys = write_per_key_multi(src, cfg, out)
+    print(f'{profile}: multi-file pack, downs {downs}, space {space_f}, '
+          f'per-key files: {len(keys)}')
 
 
 def main():
