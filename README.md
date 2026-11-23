@@ -156,11 +156,6 @@ This is built so the sound never lags behind your fingers:
 - **Games:** it pauses itself automatically when a game is in
   front (see [Game-safe](#game-safe)) — no need to toggle it off
   by hand.
-- The sounds are real recordings, not synthesized: the first
-  version synthesized its switch sounds, and the loudest one had
-  44% of its attack energy in a single 480 Hz tone — which is why
-  it sounded like a Windows error ding. Real recordings don't have
-  that problem, and they're full-spectrum instead of thin.
 
 ## Files
 
